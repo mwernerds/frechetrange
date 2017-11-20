@@ -37,7 +37,45 @@ the Fréchet decider of Dütsch and Vahrenhold uses the following methods relati
 - A getter for the Y coordinate (point) -> (double or similar)
 
 In addition to that, we currently expect that the geometry is Euclidean.
+#Example
 
+For now, only the details interfaces are available. You need to specify explicitly all aspects of your data type as for example in the
+following line from sample/bg.cpp
+```
+    frechetrange::detail::duetschvahrenhold::FrechetDistance<
+      point_type, // the point type
+      std::function<double(point_type, point_type)>, // the squared distance signature
+      std::function<double(point_type)>, // the X getter signature
+      std::function<double(point_type)> > // the Y getter signature
+      fd(
+	  [](point_type p1, point_type p2) {return bg::comparable_distance(p1,p2);}, // the squared distance
+	  [](point_type p){return bg::get<0>(p);},
+	  [](point_type p){return bg::get<1>(p);}
+      );
+
+```
+As you can see, the type point_type is being used and we give lambda-expressions for the three needed functionals squared_distance (comparable_distance
+in boost::geometry is some fast implementation of a distance such that compare is correct. It is the squared distance for Euclidean geometries, but might
+be something different for other geometries. Additionally, we forward the boost::geometry getter for X and Y as the second and third constructor
+parameters.
+
+After constructing this object, it can be used quite cleanly, for example as in
+```
+  // estimate the distance by interval cutting
+  std::pair<double, double> interval = {0, 5};        
+  while ((interval.second - interval.first) > 0.001) {
+    double m = (interval.first + interval.second) / 2;
+
+    if (fd.isBoundedBy(t1, t2, m)) {
+      interval.second = m;
+    } else {
+      interval.first = m;
+    }
+  }
+  cout << "Final Interval: [" << interval.first << "," << interval.second << "]"
+       << endl;
+
+```
 
 # Contributors
 Martin Werner - boilerplate, R-package, some integration work
