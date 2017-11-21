@@ -39,6 +39,9 @@ namespace frechetrange {
 namespace detail {
 namespace duetschvahrenhold {
 // source code from Fabian Dütsch, templatized and generalized by Martin
+/**
+* Arbitrary constant > 1.0 to signal that a segment is not reachable.
+*/
 static constexpr double BEGIN_NOT_REACHABLE = 2.0;
 
 template <
@@ -103,10 +106,6 @@ private:
   * Allocated size of the array _leftSegmentBegins
   */
   size_t _capacity;
-
-  /**
-  * Arbitrary constant > 1.0 to signal that a segment is not reachable.
-  */
 
   /**
   * Decides the Frechet distance problem for a trajectory consisting of only
@@ -212,6 +211,7 @@ private:
 
       // beginning of the reachable part of the current bottom segment
       double currBottomSegBegin = bottommostSegmentBegin;
+      double currBottomSegEnd = currBottomSegBegin;
 
       double currRightSegBegin, currRightSegEnd;
       // traverse this columns' reachable cells
@@ -219,27 +219,45 @@ private:
         // ensure that this cell is reachable
         if (isSegmentReachable(_leftSegmentBegins[rowIdx]) ||
             isSegmentReachable(currBottomSegBegin)) {
+          // whether the cell's top right corner lies in free space
+          bool isTopRightFree = squared_distance(p1[rowIdx + 1], p2[colIdx + 1])
+                                <= boundSquared;
+
           // compute the reachable part of the current cell's right
           // segment
-          getLineCircleIntersections(p1[rowIdx], p1[rowIdx + 1], p2[colIdx + 1],
-                                     boundSquared, currRightSegBegin,
-                                     currRightSegEnd);
-          currRightSegBegin =
-              getReachableBegin(currRightSegBegin, currRightSegEnd,
-                                _leftSegmentBegins[rowIdx], currBottomSegBegin);
+          if (isTopRightFree && currBottomSegEnd >= 1.0 &&
+              currBottomSegBegin <= 1.0) {
+            // the entire right segment is reachable
+            currRightSegBegin = 0.0;
+            currRightSegEnd = 1.0;
+          } else {
+            getLineCircleIntersections(p1[rowIdx], p1[rowIdx + 1], p2[colIdx + 1],
+                                       boundSquared, currRightSegBegin,
+                                       currRightSegEnd);
+            currRightSegBegin =
+                getReachableBegin(currRightSegBegin, currRightSegEnd,
+                                  _leftSegmentBegins[rowIdx], currBottomSegBegin);
+          }
 
           // compute the reachable part of the current cell's top segment
           double currTopSegBegin, currTopSegEnd;
-          getLineCircleIntersections(p2[colIdx], p2[colIdx + 1], p1[rowIdx + 1],
-                                     boundSquared, currTopSegBegin,
-                                     currTopSegEnd);
-          currTopSegBegin =
-              getReachableBegin(currTopSegBegin, currTopSegEnd,
-                                currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+          if (isTopRightFree && _leftSegmentBegins[rowIdx + 1] <= 0.0) {
+            // the entire top segment is reachable
+            currTopSegBegin = 0.0;
+            currTopSegEnd = 1.0;
+          } else {
+            getLineCircleIntersections(p2[colIdx], p2[colIdx + 1], p1[rowIdx + 1],
+                                       boundSquared, currTopSegBegin,
+                                       currTopSegEnd);
+            currTopSegBegin =
+                getReachableBegin(currTopSegBegin, currTopSegEnd,
+                                  currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+          }
 
           // add the current cell to the "frontline"
           _leftSegmentBegins[rowIdx] = currRightSegBegin;
           currBottomSegBegin = currTopSegBegin;
+          currBottomSegEnd = currTopSegEnd;
         }
 
         // update the bottommost reachable segment, if necessary
@@ -252,16 +270,22 @@ private:
       // compute the reachable part of the topmost cell's right segment
       if (isSegmentReachable(_leftSegmentBegins[lastRow]) ||
           isSegmentReachable(currBottomSegBegin)) {
-        getLineCircleIntersections(p1[lastRow], p1.back(), p2[colIdx + 1],
-                                   boundSquared, currRightSegBegin,
-                                   currRightSegEnd);
-        currRightSegBegin =
-            getReachableBegin(currRightSegBegin, currRightSegEnd,
-                              _leftSegmentBegins[lastRow], currBottomSegBegin);
+        if (squared_distance(p1[lastRow + 1], p2[colIdx + 1]) <= boundSquared &&
+            currBottomSegEnd >= 1.0 && currBottomSegBegin <= 1.0) {
+          // the entire segment is reachable
+          currRightSegBegin = 0.0;
+        } else {
+          getLineCircleIntersections(p1[lastRow], p1[lastRow + 1], p2[colIdx + 1],
+                                     boundSquared, currRightSegBegin,
+                                     currRightSegEnd);
+          currRightSegBegin =
+              getReachableBegin(currRightSegBegin, currRightSegEnd,
+                                _leftSegmentBegins[lastRow], currBottomSegBegin);
+        }
         _leftSegmentBegins[lastRow] = currRightSegBegin;
       }
 
-      // ensure that an segment of the frontline is reachable
+      // ensure that a segment of the frontline is reachable
       if (bottommostReachableRow == lastRow &&
           !isSegmentReachable(_leftSegmentBegins[lastRow])) {
         return false;
@@ -281,12 +305,18 @@ private:
           isSegmentReachable(currBottomSegBegin)) {
         // compute the reachable part of the current cell's top segment
         double currTopSegBegin, currTopSegEnd;
-        getLineCircleIntersections(p2[lastColumn], p2.back(), p1[rowIdx + 1],
-                                   boundSquared, currTopSegBegin,
-                                   currTopSegEnd);
-        currBottomSegBegin =
-            getReachableBegin(currTopSegBegin, currTopSegEnd,
-                              currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+        if (squared_distance(p1[rowIdx + 1], p2[lastColumn + 1]) <= boundSquared &&
+            _leftSegmentBegins[rowIdx + 1] <= 0.0) {
+          // the entire top segment is reachable
+          currBottomSegBegin = 0.0;
+        } else {
+          getLineCircleIntersections(p2[lastColumn], p2[lastColumn + 1], p1[rowIdx + 1],
+                                     boundSquared, currTopSegBegin,
+                                     currTopSegEnd);
+          currBottomSegBegin =
+              getReachableBegin(currTopSegBegin, currTopSegEnd,
+                                currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+        }
       }
     }
 
