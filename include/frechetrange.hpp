@@ -45,7 +45,7 @@ namespace duetschvahrenhold {
 static constexpr double BEGIN_NOT_REACHABLE = 2.0;
 
 template <
-typename Point, typename squareddistancefunctional,
+typename Trajectory, typename squareddistancefunctional,
           typename xgetterfunctional, typename ygetterfunctional>
 class FrechetDistance {
 public:
@@ -65,22 +65,22 @@ public:
   * by the passed upper bound.
   * @pre Neither of the trajectories is empty.
   */
-  bool isBoundedBy(const std::vector<Point> &traj1,
-                   const std::vector<Point> &traj2,
+  bool isBoundedBy(const Trajectory &traj1,
+                   const Trajectory &traj2,
                    const double distanceBound) {
     const double boundSquared = distanceBound * distanceBound;
 
     // ensure that the corners of the free space diagram are reachable
-    if (squared_distance(traj1.front(), traj2.front()) > boundSquared ||
-        squared_distance(traj1.back(), traj2.back()) > boundSquared)
+    if (squared_distance(traj1[0], traj2[0]) > boundSquared ||
+        squared_distance(traj1[traj1.size() - 1], traj2[traj2.size() - 1]) > boundSquared)
       return false;
 
     bool firstIsSmaller = traj1.size() <= traj2.size();
-    const std::vector<Point> &smallerTraj = firstIsSmaller ? traj1 : traj2;
-    const std::vector<Point> &biggerTraj = firstIsSmaller ? traj2 : traj1;
+    const Trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
+    const Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
 
     if (smallerTraj.size() == 1) {
-      return comparePointToTrajectory(smallerTraj.front(), biggerTraj,
+      return comparePointToTrajectory(smallerTraj[0], biggerTraj,
                                       boundSquared);
     } else if (!matchInnerPointsMonotonously(traj1, traj2, boundSquared) ||
                !matchInnerPointsMonotonously(traj2, traj1, boundSquared)) {
@@ -111,8 +111,9 @@ private:
   * Decides the Frechet distance problem for a trajectory consisting of only
   * one point.
   */
-  bool comparePointToTrajectory(const Point &p,
-                                const std::vector<Point> &trajectory,
+  template <typename point_type>
+  bool comparePointToTrajectory(const point_type &p,
+                                const Trajectory &trajectory,
                                 const double boundSquared) {
     // the first point has already been tested
     for (size_t i = 1; i < trajectory.size(); ++i) {
@@ -128,8 +129,8 @@ private:
   * such that each matching is within the passed distance bound and the
   * sequence of segment points is monotone.
   */
-  bool matchInnerPointsMonotonously(const std::vector<Point> &points,
-                                    const std::vector<Point> &segments,
+  bool matchInnerPointsMonotonously(const Trajectory &points,
+                                    const Trajectory &segments,
                                     double boundSquared) const {
     // the last point has already been tested
     const size_t pointsToMatchEnd = points.size() - 1;
@@ -183,8 +184,8 @@ private:
   * @pre Both trajectories consist of at least two points
   *      and the starting and ending points are within distance.
   */
-  bool traverseFreeSpaceDiagram(const std::vector<Point> &p1,
-                                const std::vector<Point> &p2,
+  bool traverseFreeSpaceDiagram(const Trajectory &p1,
+                                const Trajectory &p2,
                                 const double boundSquared) {
     // init the beginnings of reachable parts of the "frontline",
     // i.e., the right segments of the column lastly processed
@@ -348,9 +349,13 @@ private:
   *                 (p1 + end * (p2-p1)) is the second intersection,
   *                 if it exists, or unchanged, otherwise.
   */
-  void getLineCircleIntersections(const Point &p1, const Point &p2,
-                                  const Point &cp, const double radiusSquared,
+  template <typename point_type>
+  void getLineCircleIntersections(const point_type &p1, const point_type &p2,
+                                  const point_type &cp, const double radiusSquared,
                                   double &begin, double &end) const {
+    // TODO: Adapt to template parameter squareddistancefunctional;
+    //       The following assumes the Euclidean distance.
+
     // Compute the points p1+x*(p2-p1) on the segment from p1 to p2
     // that intersect the circle around cp with radius r:
     // d(cp, p1+x*(p2-p1))^2 = r^2  <=>  a*x^2 + bx + c = 0,
