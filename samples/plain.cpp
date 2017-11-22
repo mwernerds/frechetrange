@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
   trajectory t2 = {{1, 1}, {2, 2}, {1, 3}};
 
   frechetrange::detail::duetschvahrenhold::FrechetDistance<
-      point, distance_functional_type, std::function<double(point p)>,
+      trajectory, distance_functional_type, std::function<double(point p)>,
       std::function<double(point p)>>
       fd(squared_dist, getx, gety);
 

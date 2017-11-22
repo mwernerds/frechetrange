@@ -39,10 +39,13 @@ namespace frechetrange {
 namespace detail {
 namespace duetschvahrenhold {
 // source code from Fabian Dütsch, templatized and generalized by Martin
+/**
+* Arbitrary constant > 1.0 to signal that a segment is not reachable.
+*/
 static constexpr double BEGIN_NOT_REACHABLE = 2.0;
 
 template <
-typename Point, typename squareddistancefunctional,
+typename Trajectory, typename squareddistancefunctional,
           typename xgetterfunctional, typename ygetterfunctional>
 class FrechetDistance {
 public:
@@ -62,22 +65,22 @@ public:
   * by the passed upper bound.
   * @pre Neither of the trajectories is empty.
   */
-  bool isBoundedBy(const std::vector<Point> &traj1,
-                   const std::vector<Point> &traj2,
+  bool isBoundedBy(const Trajectory &traj1,
+                   const Trajectory &traj2,
                    const double distanceBound) {
     const double boundSquared = distanceBound * distanceBound;
 
     // ensure that the corners of the free space diagram are reachable
-    if (squared_distance(traj1.front(), traj2.front()) > boundSquared ||
-        squared_distance(traj1.back(), traj2.back()) > boundSquared)
+    if (squared_distance(traj1[0], traj2[0]) > boundSquared ||
+        squared_distance(traj1[traj1.size() - 1], traj2[traj2.size() - 1]) > boundSquared)
       return false;
 
     bool firstIsSmaller = traj1.size() <= traj2.size();
-    const std::vector<Point> &smallerTraj = firstIsSmaller ? traj1 : traj2;
-    const std::vector<Point> &biggerTraj = firstIsSmaller ? traj2 : traj1;
+    const Trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
+    const Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
 
     if (smallerTraj.size() == 1) {
-      return comparePointToTrajectory(smallerTraj.front(), biggerTraj,
+      return comparePointToTrajectory(smallerTraj[0], biggerTraj,
                                       boundSquared);
     } else if (!matchInnerPointsMonotonously(traj1, traj2, boundSquared) ||
                !matchInnerPointsMonotonously(traj2, traj1, boundSquared)) {
@@ -105,15 +108,12 @@ private:
   size_t _capacity;
 
   /**
-  * Arbitrary constant > 1.0 to signal that a segment is not reachable.
-  */
-
-  /**
   * Decides the Frechet distance problem for a trajectory consisting of only
   * one point.
   */
-  bool comparePointToTrajectory(const Point &p,
-                                const std::vector<Point> &trajectory,
+  template <typename point_type>
+  bool comparePointToTrajectory(const point_type &p,
+                                const Trajectory &trajectory,
                                 const double boundSquared) {
     // the first point has already been tested
     for (size_t i = 1; i < trajectory.size(); ++i) {
@@ -129,8 +129,8 @@ private:
   * such that each matching is within the passed distance bound and the
   * sequence of segment points is monotone.
   */
-  bool matchInnerPointsMonotonously(const std::vector<Point> &points,
-                                    const std::vector<Point> &segments,
+  bool matchInnerPointsMonotonously(const Trajectory &points,
+                                    const Trajectory &segments,
                                     double boundSquared) const {
     // the last point has already been tested
     const size_t pointsToMatchEnd = points.size() - 1;
@@ -184,8 +184,8 @@ private:
   * @pre Both trajectories consist of at least two points
   *      and the starting and ending points are within distance.
   */
-  bool traverseFreeSpaceDiagram(const std::vector<Point> &p1,
-                                const std::vector<Point> &p2,
+  bool traverseFreeSpaceDiagram(const Trajectory &p1,
+                                const Trajectory &p2,
                                 const double boundSquared) {
     // init the beginnings of reachable parts of the "frontline",
     // i.e., the right segments of the column lastly processed
@@ -212,6 +212,7 @@ private:
 
       // beginning of the reachable part of the current bottom segment
       double currBottomSegBegin = bottommostSegmentBegin;
+      double currBottomSegEnd = currBottomSegBegin;
 
       double currRightSegBegin, currRightSegEnd;
       // traverse this columns' reachable cells
@@ -219,27 +220,45 @@ private:
         // ensure that this cell is reachable
         if (isSegmentReachable(_leftSegmentBegins[rowIdx]) ||
             isSegmentReachable(currBottomSegBegin)) {
+          // whether the cell's top right corner lies in free space
+          bool isTopRightFree = squared_distance(p1[rowIdx + 1], p2[colIdx + 1])
+                                <= boundSquared;
+
           // compute the reachable part of the current cell's right
           // segment
-          getLineCircleIntersections(p1[rowIdx], p1[rowIdx + 1], p2[colIdx + 1],
-                                     boundSquared, currRightSegBegin,
-                                     currRightSegEnd);
-          currRightSegBegin =
-              getReachableBegin(currRightSegBegin, currRightSegEnd,
-                                _leftSegmentBegins[rowIdx], currBottomSegBegin);
+          if (isTopRightFree && currBottomSegEnd >= 1.0 &&
+              currBottomSegBegin <= 1.0) {
+            // the entire right segment is reachable
+            currRightSegBegin = 0.0;
+            currRightSegEnd = 1.0;
+          } else {
+            getLineCircleIntersections(p1[rowIdx], p1[rowIdx + 1], p2[colIdx + 1],
+                                       boundSquared, currRightSegBegin,
+                                       currRightSegEnd);
+            currRightSegBegin =
+                getReachableBegin(currRightSegBegin, currRightSegEnd,
+                                  _leftSegmentBegins[rowIdx], currBottomSegBegin);
+          }
 
           // compute the reachable part of the current cell's top segment
           double currTopSegBegin, currTopSegEnd;
-          getLineCircleIntersections(p2[colIdx], p2[colIdx + 1], p1[rowIdx + 1],
-                                     boundSquared, currTopSegBegin,
-                                     currTopSegEnd);
-          currTopSegBegin =
-              getReachableBegin(currTopSegBegin, currTopSegEnd,
-                                currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+          if (isTopRightFree && _leftSegmentBegins[rowIdx + 1] <= 0.0) {
+            // the entire top segment is reachable
+            currTopSegBegin = 0.0;
+            currTopSegEnd = 1.0;
+          } else {
+            getLineCircleIntersections(p2[colIdx], p2[colIdx + 1], p1[rowIdx + 1],
+                                       boundSquared, currTopSegBegin,
+                                       currTopSegEnd);
+            currTopSegBegin =
+                getReachableBegin(currTopSegBegin, currTopSegEnd,
+                                  currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+          }
 
           // add the current cell to the "frontline"
           _leftSegmentBegins[rowIdx] = currRightSegBegin;
           currBottomSegBegin = currTopSegBegin;
+          currBottomSegEnd = currTopSegEnd;
         }
 
         // update the bottommost reachable segment, if necessary
@@ -252,16 +271,22 @@ private:
       // compute the reachable part of the topmost cell's right segment
       if (isSegmentReachable(_leftSegmentBegins[lastRow]) ||
           isSegmentReachable(currBottomSegBegin)) {
-        getLineCircleIntersections(p1[lastRow], p1.back(), p2[colIdx + 1],
-                                   boundSquared, currRightSegBegin,
-                                   currRightSegEnd);
-        currRightSegBegin =
-            getReachableBegin(currRightSegBegin, currRightSegEnd,
-                              _leftSegmentBegins[lastRow], currBottomSegBegin);
+        if (squared_distance(p1[lastRow + 1], p2[colIdx + 1]) <= boundSquared &&
+            currBottomSegEnd >= 1.0 && currBottomSegBegin <= 1.0) {
+          // the entire segment is reachable
+          currRightSegBegin = 0.0;
+        } else {
+          getLineCircleIntersections(p1[lastRow], p1[lastRow + 1], p2[colIdx + 1],
+                                     boundSquared, currRightSegBegin,
+                                     currRightSegEnd);
+          currRightSegBegin =
+              getReachableBegin(currRightSegBegin, currRightSegEnd,
+                                _leftSegmentBegins[lastRow], currBottomSegBegin);
+        }
         _leftSegmentBegins[lastRow] = currRightSegBegin;
       }
 
-      // ensure that an segment of the frontline is reachable
+      // ensure that a segment of the frontline is reachable
       if (bottommostReachableRow == lastRow &&
           !isSegmentReachable(_leftSegmentBegins[lastRow])) {
         return false;
@@ -281,12 +306,18 @@ private:
           isSegmentReachable(currBottomSegBegin)) {
         // compute the reachable part of the current cell's top segment
         double currTopSegBegin, currTopSegEnd;
-        getLineCircleIntersections(p2[lastColumn], p2.back(), p1[rowIdx + 1],
-                                   boundSquared, currTopSegBegin,
-                                   currTopSegEnd);
-        currBottomSegBegin =
-            getReachableBegin(currTopSegBegin, currTopSegEnd,
-                              currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+        if (squared_distance(p1[rowIdx + 1], p2[lastColumn + 1]) <= boundSquared &&
+            _leftSegmentBegins[rowIdx + 1] <= 0.0) {
+          // the entire top segment is reachable
+          currBottomSegBegin = 0.0;
+        } else {
+          getLineCircleIntersections(p2[lastColumn], p2[lastColumn + 1], p1[rowIdx + 1],
+                                     boundSquared, currTopSegBegin,
+                                     currTopSegEnd);
+          currBottomSegBegin =
+              getReachableBegin(currTopSegBegin, currTopSegEnd,
+                                currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+        }
       }
     }
 
@@ -318,9 +349,13 @@ private:
   *                 (p1 + end * (p2-p1)) is the second intersection,
   *                 if it exists, or unchanged, otherwise.
   */
-  void getLineCircleIntersections(const Point &p1, const Point &p2,
-                                  const Point &cp, const double radiusSquared,
+  template <typename point_type>
+  void getLineCircleIntersections(const point_type &p1, const point_type &p2,
+                                  const point_type &cp, const double radiusSquared,
                                   double &begin, double &end) const {
+    // TODO: Adapt to template parameter squareddistancefunctional;
+    //       The following assumes the Euclidean distance.
+
     // Compute the points p1+x*(p2-p1) on the segment from p1 to p2
     // that intersect the circle around cp with radius r:
     // d(cp, p1+x*(p2-p1))^2 = r^2  <=>  a*x^2 + bx + c = 0,
