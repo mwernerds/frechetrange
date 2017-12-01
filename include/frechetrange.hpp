@@ -3,27 +3,23 @@
 
 /**
 *   This file collects all implementations of the three winning submissions to
-* the
-*   ACM SIGSPATIAL GIS Cup 2017 in a single codebase readily usable in your
+* the ACM SIGSPATIAL GIS Cup 2017 in a single codebase readily usable in your
 * projects.
 *
 *   The implementations are based on simple C++ / STL concepts such that you can
-* very easily write
-*   adapters to your existing data structures. See example/foreign.cpp for an
-* example with a strange
-*   trajectory class.
+* very easily write adapters to your existing data structures. See
+* example/foreign.cpp for an example with a strange trajectory class.
 *
 *   We encourage you to use boost::geometry for all your geometry processing, as
-* it provides some nice features
-*   out of the box and is also compatible with custom storage for geometry.
+* it provides some nice features out of the box and is also compatible with
+* custom storage for geometry.
 *
 *   Organization of this file:
 *
 *   Namespaces:
 *
 *     frechetrange       contains boilerplate and unifying code making all
-* relevant aspects of the submissions
-*                        accessible with a single interface.
+* relevant aspects of the submissions accessible with a single interface.
 *          detail             contains implementation details of the three
 * approaches well-isolated
 *               duetschvarhenhold
@@ -33,14 +29,13 @@
 *
 */
 
-#include <algorithm>      // for std::sort, std::lower_bound, and std::upper_bound
-#include <cmath>          // for std::floor
-#include <cstddef>        // for std::size_t
-#include <functional>     // for std::hash
-#include <limits>         // for std::numeric_limits
+#include <algorithm> // for std::sort, std::lower_bound, std::upper_bound, and std::max
+#include <cmath>      // for std::floor
+#include <cstddef>    // for std::size_t
+#include <functional> // for std::hash
+#include <stdexcept>  // for std::invalid_argument
 #include <unordered_map>
-#include <stdexcept>      // for std::invalid_argument
-#include <utility>        // for std::move
+#include <utility> // for std::move
 #include <vector>
 
 #define ALLOW_FUNCTIONAL
@@ -54,8 +49,7 @@ namespace duetschvahrenhold {
 */
 static constexpr double BEGIN_NOT_REACHABLE = 2.0;
 
-template <
-typename Trajectory, typename squareddistancefunctional,
+template <typename Trajectory, typename squareddistancefunctional,
           typename xgetterfunctional, typename ygetterfunctional>
 class FrechetDistance {
 public:
@@ -72,14 +66,14 @@ public:
   * by the passed upper bound.
   * @pre Neither of the trajectories is empty.
   */
-  bool isBoundedBy(const Trajectory &traj1,
-                   const Trajectory &traj2,
+  bool isBoundedBy(const Trajectory &traj1, const Trajectory &traj2,
                    const double distanceBound) {
     const double boundSquared = distanceBound * distanceBound;
 
     // ensure that the corners of the free space diagram are reachable
     if (_squaredDistance(traj1[0], traj2[0]) > boundSquared ||
-        _squaredDistance(traj1[traj1.size() - 1], traj2[traj2.size() - 1]) > boundSquared)
+        _squaredDistance(traj1[traj1.size() - 1], traj2[traj2.size() - 1]) >
+            boundSquared)
       return false;
 
     bool firstIsSmaller = traj1.size() <= traj2.size();
@@ -87,8 +81,7 @@ public:
     const Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
 
     if (smallerTraj.size() == 1) {
-      return comparePointToTrajectory(smallerTraj[0], biggerTraj,
-                                      boundSquared);
+      return comparePointToTrajectory(smallerTraj[0], biggerTraj, boundSquared);
     } else if (!matchInnerPointsMonotonously(traj1, traj2, boundSquared) ||
                !matchInnerPointsMonotonously(traj2, traj1, boundSquared)) {
       // There exists no monotone matchting from one trajectory to the other,
@@ -105,7 +98,7 @@ private:
   squareddistancefunctional _squaredDistance;
   xgetterfunctional _getX;
   ygetterfunctional _getY;
-  
+
   /**
   * Beginnings of reachable parts of the free space segments on
   * the "frontline", i. e., the right segments of the free space cells lastly
@@ -196,8 +189,7 @@ private:
   * @pre Both trajectories consist of at least two points
   *      and the starting and ending points are within distance.
   */
-  bool traverseFreeSpaceDiagram(const Trajectory &p1,
-                                const Trajectory &p2,
+  bool traverseFreeSpaceDiagram(const Trajectory &p1, const Trajectory &p2,
                                 const double boundSquared) {
     // init the beginnings of reachable parts of the "frontline",
     // i.e., the right segments of the column lastly processed
@@ -233,8 +225,8 @@ private:
         if (isSegmentReachable(_leftSegmentBegins[rowIdx]) ||
             isSegmentReachable(currBottomSegBegin)) {
           // whether the cell's top right corner lies in free space
-          bool isTopRightFree = _squaredDistance(p1[rowIdx + 1], p2[colIdx + 1])
-                                <= boundSquared;
+          bool isTopRightFree =
+              _squaredDistance(p1[rowIdx + 1], p2[colIdx + 1]) <= boundSquared;
 
           // compute the reachable part of the current cell's right
           // segment
@@ -244,12 +236,12 @@ private:
             currRightSegBegin = 0.0;
             currRightSegEnd = 1.0;
           } else {
-            getLineCircleIntersections(p1[rowIdx], p1[rowIdx + 1], p2[colIdx + 1],
-                                       boundSquared, currRightSegBegin,
-                                       currRightSegEnd);
-            currRightSegBegin =
-                getReachableBegin(currRightSegBegin, currRightSegEnd,
-                                  _leftSegmentBegins[rowIdx], currBottomSegBegin);
+            getLineCircleIntersections(p1[rowIdx], p1[rowIdx + 1],
+                                       p2[colIdx + 1], boundSquared,
+                                       currRightSegBegin, currRightSegEnd);
+            currRightSegBegin = getReachableBegin(
+                currRightSegBegin, currRightSegEnd, _leftSegmentBegins[rowIdx],
+                currBottomSegBegin);
           }
 
           // compute the reachable part of the current cell's top segment
@@ -259,12 +251,12 @@ private:
             currTopSegBegin = 0.0;
             currTopSegEnd = 1.0;
           } else {
-            getLineCircleIntersections(p2[colIdx], p2[colIdx + 1], p1[rowIdx + 1],
-                                       boundSquared, currTopSegBegin,
-                                       currTopSegEnd);
-            currTopSegBegin =
-                getReachableBegin(currTopSegBegin, currTopSegEnd,
-                                  currBottomSegBegin, _leftSegmentBegins[rowIdx]);
+            getLineCircleIntersections(p2[colIdx], p2[colIdx + 1],
+                                       p1[rowIdx + 1], boundSquared,
+                                       currTopSegBegin, currTopSegEnd);
+            currTopSegBegin = getReachableBegin(currTopSegBegin, currTopSegEnd,
+                                                currBottomSegBegin,
+                                                _leftSegmentBegins[rowIdx]);
           }
 
           // add the current cell to the "frontline"
@@ -288,12 +280,12 @@ private:
           // the entire segment is reachable
           currRightSegBegin = 0.0;
         } else {
-          getLineCircleIntersections(p1[lastRow], p1[lastRow + 1], p2[colIdx + 1],
-                                     boundSquared, currRightSegBegin,
-                                     currRightSegEnd);
-          currRightSegBegin =
-              getReachableBegin(currRightSegBegin, currRightSegEnd,
-                                _leftSegmentBegins[lastRow], currBottomSegBegin);
+          getLineCircleIntersections(p1[lastRow], p1[lastRow + 1],
+                                     p2[colIdx + 1], boundSquared,
+                                     currRightSegBegin, currRightSegEnd);
+          currRightSegBegin = getReachableBegin(
+              currRightSegBegin, currRightSegEnd, _leftSegmentBegins[lastRow],
+              currBottomSegBegin);
         }
         _leftSegmentBegins[lastRow] = currRightSegBegin;
       }
@@ -318,14 +310,15 @@ private:
           isSegmentReachable(currBottomSegBegin)) {
         // compute the reachable part of the current cell's top segment
         double currTopSegBegin, currTopSegEnd;
-        if (_squaredDistance(p1[rowIdx + 1], p2[lastColumn + 1]) <= boundSquared &&
+        if (_squaredDistance(p1[rowIdx + 1], p2[lastColumn + 1]) <=
+                boundSquared &&
             _leftSegmentBegins[rowIdx + 1] <= 0.0) {
           // the entire top segment is reachable
           currBottomSegBegin = 0.0;
         } else {
-          getLineCircleIntersections(p2[lastColumn], p2[lastColumn + 1], p1[rowIdx + 1],
-                                     boundSquared, currTopSegBegin,
-                                     currTopSegEnd);
+          getLineCircleIntersections(p2[lastColumn], p2[lastColumn + 1],
+                                     p1[rowIdx + 1], boundSquared,
+                                     currTopSegBegin, currTopSegEnd);
           currBottomSegBegin =
               getReachableBegin(currTopSegBegin, currTopSegEnd,
                                 currBottomSegBegin, _leftSegmentBegins[rowIdx]);
@@ -365,8 +358,9 @@ private:
   */
   template <typename point_type>
   void getLineCircleIntersections(const point_type &p1, const point_type &p2,
-                                  const point_type &cp, const double radiusSquared,
-                                  double &begin, double &end) const {
+                                  const point_type &cp,
+                                  const double radiusSquared, double &begin,
+                                  double &end) const {
     // TODO: Adapt to template parameter squareddistancefunctional;
     //       The following assumes the Euclidean distance.
 
@@ -465,13 +459,14 @@ public:
   */
   Grid(double epsilon, squareddistancefunctional squaredDistance,
        xgetterfunctional xGetter, ygetterfunctional yGetter)
-      : _epsilon(epsilon), _map(), _initialized(false),
-        _useLeftBorder(true), _useBottomBorder(true), _expectedQueryCost(0),
-        _decider(squaredDistance, xGetter, yGetter), _getX(xGetter), _getY(yGetter) {}
-  Grid(const Grid&) = default;
-  Grid(Grid&&) = default;
-  Grid& operator=(const Grid&) = default;
-  Grid& operator=(Grid&&) = default;
+      : _epsilon(epsilon), _map(), _optimized(false), _useLeftBorder(true),
+        _useBottomBorder(true), _expectedQueryCost(0),
+        _decider(squaredDistance, xGetter, yGetter), _getX(xGetter),
+        _getY(yGetter) {}
+  Grid(const Grid &) = default;
+  Grid(Grid &&) = default;
+  Grid &operator=(const Grid &) = default;
+  Grid &operator=(Grid &&) = default;
 
   /**
   * Returns the mesh size of this grid.
@@ -479,100 +474,120 @@ public:
   double getEpsilon() const { return _epsilon; }
 
   void reserve(size_t trajectories) { _map.reserve(trajectories); }
-  void insert(const Trajectory& trajectory) {
+  void insert(const Trajectory &trajectory) {
     // TODO: insert in multiple grids
     if (trajectory.size() > 0)
-      insert<true, true>(MBR(trajectory));
+      this->template insert<true, true>(MBR(trajectory, _getX, _getY));
   }
-  void insert(Trajectory&& trajectory) {
+  void insert(Trajectory &&trajectory) {
     if (trajectory.size() > 0)
-      insert<true, true>(MBR(std::move(trajectory)));
+      this->template insert<true, true>(
+          MBR(std::move(trajectory), _getX, _getY));
   }
-  void postInitialize() {
+  void optimize() {
     // only keep the grid with the best expected performance
     // TODO
 
     // sort cells
     if (_useLeftBorder)
-      if(_useBottomBorder)
-        sortCells<true, true>();
+      if (_useBottomBorder)
+        this->template sortCells<true, true>();
       else
-        sortCells<true, false>();
+        this->template sortCells<true, false>();
+    else if (_useBottomBorder)
+      this->template sortCells<false, true>();
     else
-      if(_useBottomBorder)
-        sortCells<false, true>();
-      else
-        sortCells<false, false>();
+      this->template sortCells<false, false>();
 
-    _initialized = true;
+    _optimized = true;
+  }
+
+  std::vector<const Trajectory *> rangeQuery(const Trajectory &query,
+                                             double distanceThreshold) {
+    std::vector<const Trajectory *> resultSet;
+    rangeQuery(query, distanceThreshold, resultSet);
+    return resultSet;
   }
 
   /**
-  * @param output Supports the method push_back to write the result trajectories.
+  * @param output Supports the method push_back to write constant pointers to
+  * the result trajectories.
   */
-  template<typename Output>
-  void rangeQuery(const Trajectory& query, double distanceThreshold, Output& output) {
+  template <typename Output>
+  void rangeQuery(const Trajectory &query, double distanceThreshold,
+                  Output &output) {
     if (query.size() == 0)
       return;
     else if (distanceThreshold > _epsilon)
-      throw std::invalid_argument("The distance threshold is grater than the mesh size.");
-    else if (!_initialized)
-      postInitialize();
+      throw std::invalid_argument(
+          "The distance threshold is grater than the mesh size.");
 
     if (_useLeftBorder)
-      if(_useBottomBorder)
-        query<true, true, Output>(query, distanceThreshold, output);
+      if (_useBottomBorder)
+        this->template query<true, true, Output>(query, distanceThreshold,
+                                                 output);
       else
-        query<true, false, Output>(query, distanceThreshold, output);
+        this->template query<true, false, Output>(query, distanceThreshold,
+                                                  output);
+    else if (_useBottomBorder)
+      this->template query<false, true, Output>(query, distanceThreshold,
+                                                output);
     else
-      if(_useBottomBorder)
-        query<false, true, Output>(query, distanceThreshold, output);
-      else
-        query<false, false, Output>(query, distanceThreshold, output);
+      this->template query<false, false, Output>(query, distanceThreshold,
+                                                 output);
   }
 
 private:
   /**
   * Integer coordinates of a grid cell
   */
-  static struct CellNr {
+  struct CellNr {
     long long x, y;
-    bool operator==(const CellNr& other) const {
+    bool operator==(const CellNr &other) const {
       return x == other.x && y == other.y;
     }
   };
 
-  static struct MBR {
-    const Trajectory _trajectory;
+  struct MBR {
+    Trajectory trajectory;
     /**
     * Coordinates of the borders of the bounding box
     */
-    double _minX, _maxX, _minY, _maxY;
+    double minX, maxX, minY, maxY;
 
-    MBR(const Trajectory& trajectory) : _trajectory(trajectory) { initBorders(); }
-    MBR(Trajectory&& trajectory) : _trajectory(std::move(trajectory)) { initBorders(); }
+    MBR(const Trajectory &t, const xgetterfunctional &getX,
+        const ygetterfunctional &getY)
+        : trajectory(t) {
+      initBorders(getX, getY);
+    }
+    MBR(Trajectory &&t, const xgetterfunctional getX,
+        const ygetterfunctional &getY)
+        : trajectory(std::move(t)) {
+      initBorders(getX, getY);
+    }
     MBR() = default;
-    MBR(const MBR&) = default;
-    MBR(MBR&&) = default;
-    MBR& operator=(const MBR&) = default;
-    MBR& operator=(MBR&) = default;
+    MBR(const MBR &) = default;
+    MBR(MBR &&) = default;
+    MBR &operator=(const MBR &) = default;
+    MBR &operator=(MBR &) = default;
 
-    void initBorders() {
-      _minX = _maxX = _xGet(_trajectory[0]);
-      _minY = _maxY = _yGet(_trajectory[0]);
+    void initBorders(const xgetterfunctional &getX,
+                     const ygetterfunctional &getY) {
+      minX = maxX = getX(trajectory[0]);
+      minY = maxY = getY(trajectory[0]);
 
-      for (size_t i = 1; i < _trajectory.size(); ++i) {
-        auto xCoord = _xGet(_trajectory[i]);
-        if (xCoord < _minX)
-          _minX = xCoord;
-        else if (xCoord > _maxX)
-          _maxX = xCoord;
+      for (size_t i = 1; i < trajectory.size(); ++i) {
+        auto xCoord = getX(trajectory[i]);
+        if (xCoord < minX)
+          minX = xCoord;
+        else if (xCoord > maxX)
+          maxX = xCoord;
 
-        auto yCoord = _yGet(_trajectory[i]);
-        if (yCoord < _minY)
-          _minY = yCoord;
-        else if (yCoord > _maxY)
-          _maxY = yCoord;
+        auto yCoord = getY(trajectory[i]);
+        if (yCoord < minY)
+          minY = yCoord;
+        else if (yCoord > maxY)
+          maxY = yCoord;
       }
     }
     /**
@@ -581,32 +596,35 @@ private:
     * @tparam first Whether the first (i. e., left resp. bottom) or
     *               second (i.e., right resp. top) border is returned
     */
-    template <bool xDim, bool first>
-    double getBorder() const;
-    template <>
-    double getBorder<true, true>() const { return _minX; }
-    template <>
-    double getBorder<true, false>() const { return _maxX; }
-    template <>
-    double getBorder<false, true>() const { return _minY; }
-    template <>
-    double getBorder<false, false>() const { return _maxY; }
+    // TODO
+    template <bool xDim, bool first> double getBorder() const {
+      // the compiler hopefully eliminates the branches
+      if (xDim)
+        if (first)
+          return minX;
+        else
+          return maxX;
+      else if (first)
+        return minY;
+      else
+        return maxY;
+    }
+  };
 
-    /**
-    * Compare trajectories by the specified BB border coordinate.
-    */
-    template <bool xDim, bool first>
-    static struct BorderComparator {
-      bool operator()(const MBR& m1, const MBR& m2) const {
-        return m1.getBorder<xDim, first>() < m2.getBorder<xDim, first>();
-      }
-    };
+  /**
+  * Compare MBRs by the specified border coordinate.
+  */
+  template <bool xDim, bool first> struct MBRComparator {
+    bool operator()(const MBR &m1, const MBR &m2) const {
+      return m1.template getBorder<xDim, first>() <
+             m2.template getBorder<xDim, first>();
+    }
   };
 
   /**
   * Cell of the grid
   */
-  static struct Cell {
+  struct Cell {
     using Bucket = std::vector<MBR>;
     /**
     * Whether this cell is sorted by x- or y-coordinates
@@ -618,38 +636,34 @@ private:
     Bucket bucket;
 
     Cell() = default;
-    Cell(const Cell&) = default;
-    Cell(Cell&&) = default;
-    Cell& operator=(const Cell&) = default;
-    Cell& operator=(Cell&) = default;
+    Cell(const Cell &) = default;
+    Cell(Cell &&) = default;
+    Cell &operator=(const Cell &) = default;
+    Cell &operator=(Cell &) = default;
 
-    template <bool left, bool bottom>
-    void sort() {
+    template <bool left, bool bottom> void sort() {
       // decide whether to sort by x- or y-coordinates
       xSorted = chooseSortingOrder<left, bottom>();
       if (xSorted)
-        std::sort(bucket.begin(), bucket.end(),
-                  MBR::BorderComparator<true, left>());
+        std::sort(bucket.begin(), bucket.end(), MBRComparator<true, left>());
       else
-        std::sort(bucket.begin(), bucket.end(),
-                  MBR::BorderComparator<false, bottom>());
+        std::sort(bucket.begin(), bucket.end(), MBRComparator<false, bottom>());
     }
-    template <bool left, bool bottom>
-    bool chooseSortingOrder() {
+    template <bool left, bool bottom> bool chooseSortingOrder() {
       // find extremal MBR corner coordinates
-      double minX = bucket[0].getBorder<true, left>();
+      double minX = bucket[0].template getBorder<true, left>();
       double maxX = minX;
-      double minY = bucket[0].getBorder<false, bottom>();
+      double minY = bucket[0].template getBorder<false, bottom>();
       double maxY = minY;
 
       for (size_t i = 1; i < bucket.size(); ++i) {
-        double x = bucket[i].getBorder<true, left>();
+        double x = bucket[i].template getBorder<true, left>();
         if (x < minX) {
           minX = x;
         } else if (x > maxX) {
           maxX = x;
         }
-        double y = bucket[i].getBorder<false, bottom>();
+        double y = bucket[i].template getBorder<false, bottom>();
         if (y < minY) {
           minY = y;
         } else if (y > maxY) {
@@ -664,11 +678,11 @@ private:
     }
   };
 
-  static struct CellHasher {
-    size_t operator()(const CellNr& cell) const {
+  struct CellHasher {
+    size_t operator()(const CellNr &cell) const {
       std::hash<long long> longHasher;
-      size_t hash = longHasher(cellNr.x) + 0x9e3779b9;
-      hash ^= longHasher(cellNr.y) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+      size_t hash = longHasher(cell.x) + 0x9e3779b9;
+      hash ^= longHasher(cell.y) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
       return hash;
     }
   };
@@ -704,7 +718,7 @@ private:
   * Map from 2D cell coordinates to cells of dataset trajectories.
   */
   Map _map;
-  bool _initialized;
+  bool _optimized;
   /**
   * Whether the bounding box corner, according to which queries are mapped to
   * grid cells, lies on the left (or right) border of the bounding box.
@@ -721,7 +735,9 @@ private:
   size_t _expectedQueryCost;
   // TODO: multiple maps for different MBR corners
 
-  FrechetDistance<Trajectory, squareddistancefunctional, xgetterfunctional, ygetterfunctional> _decider;
+  mutable FrechetDistance<Trajectory, squareddistancefunctional,
+                          xgetterfunctional, ygetterfunctional>
+      _decider;
   squareddistancefunctional _squaredDistance;
   xgetterfunctional _getX;
   ygetterfunctional _getY;
@@ -733,15 +749,14 @@ private:
     return std::floor(pointCoord / _epsilon) * _epsilon;
   }
 
-  template<bool left, bool bottom>
-  void insert(MBR&& mbr) {
+  template <bool left, bool bottom> void insert(MBR &&mbr) {
     // integer coordinates of the grid cell
-    CellNr cellNr{toCellNr(mbr.getBorder<true, left>()),
-                  toCellNr(mbr.getBorder<false, bottom>())};
-    Cell& cell = _map[cellNr];
-    Cell::Bucket& bucket = cell.bucket;
+    CellNr cellNr{toCellNr(mbr.template getBorder<true, left>()),
+                  toCellNr(mbr.template getBorder<false, bottom>())};
+    Cell &cell = _map[cellNr];
+    typename Cell::Bucket &bucket = cell.bucket;
 
-    if(!initialized) {
+    if (!_optimized) {
       // append the trajectory to the cell's bucket
       bucket.emplace_back(std::move(mbr));
       // update the sum of squared bucket sizes:
@@ -749,39 +764,40 @@ private:
       _expectedQueryCost += 2 * bucket.size() - 1;
     } else {
       // insert in the sorted bucket
-      auto insertPos = cell.xSorted ?
-                         std::upper_bound(bucket.begin(), bucket.end(), mbr,
-                                          MBR::BorderComparator<true, left>()) : 
-                         std::upper_bound(bucket.begin(), bucket.end(), mbr,
-                                          MBR::BorderComparator<false, bottom>());
+      auto insertPos = cell.xSorted
+                           ? std::upper_bound(bucket.begin(), bucket.end(), mbr,
+                                              MBRComparator<true, left>())
+                           : std::upper_bound(bucket.begin(), bucket.end(), mbr,
+                                              MBRComparator<false, bottom>());
       bucket.emplace(insertPos, std::move(mbr));
     }
   }
 
-  template<bool left, bool bottom>
-  void sortCells() {
-    for(auto& iter : _map) {
-      Cell& cell = iter->second;
+  template <bool left, bool bottom> void sortCells() {
+    for (auto &iter : _map) {
+      Cell &cell = iter.second;
       if (cell.bucket.size() >= MIN_SORT_SIZE)
-        cell.sort<left, bottom>();
+        cell.template sort<left, bottom>();
     }
   }
 
-  template<bool left, bool bottom, typename Output>
-  void query(const Trajectory& query, double threshold, Output& output) {
-    MBR queryMBR(query);
+  template <bool left, bool bottom, typename Output>
+  void query(const Trajectory &query, double threshold, Output &output) {
+    MBR queryMBR(query, _getX, _getY);
     // check which horizontal neighbor cells need to be visited
-    double cellCoordX = toCellCoord(queryMBR.getBorder<true, left>());
-    bool visitLeft = queryMBR.getBorder<true, left>() - threshold < cellCoordX;
-    bool visitRight =
-          queryMBR.getBorder<true, left>() + threshold >= cellCoordX + _epsilon;
+    double cellCoordX = toCellCoord(queryMBR.template getBorder<true, left>());
+    bool visitLeft =
+        queryMBR.template getBorder<true, left>() - threshold < cellCoordX;
+    bool visitRight = queryMBR.template getBorder<true, left>() + threshold >=
+                      cellCoordX + _epsilon;
 
     // check which vertical neighbor cells need to be visited
-    double cellCoordY = toCellCoord(queryMBR.getBorder<false, bottom>());
+    double cellCoordY =
+        toCellCoord(queryMBR.template getBorder<false, bottom>());
     bool visitBottom =
-          queryMBR.getBorder<false, bottom>() - threshold < cellCoordY;
-    bool visitTop =
-          queryMBR.getBorder<false, bottom>() + threshold >= cellCoordY + _epsilon;
+        queryMBR.template getBorder<false, bottom>() - threshold < cellCoordY;
+    bool visitTop = queryMBR.template getBorder<false, bottom>() + threshold >=
+                    cellCoordY + _epsilon;
 
     // memorize the crossed cell borders
     Crossings crossedVerticals =
@@ -792,38 +808,39 @@ private:
         static_cast<Crossings>(visitTop) * CROSSES_END;
 
     // integral coordinates of the cell the query trajectory is mapped to
-    CellNr cellNr{toCellNr(queryMBR.getBorder<true, left>()),
-                  toCellNr(queryMBR.getBorder<false, bottom>())};
+    CellNr cellNr{toCellNr(queryMBR.template getBorder<true, left>()),
+                  toCellNr(queryMBR.template getBorder<false, bottom>())};
 
     // visit the center cell
-    checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                            crossedVerticals, crossedHorizontals, output);
+    checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                    crossedVerticals, crossedHorizontals,
+                                    output);
     // visit the bottom cell
     --cellNr.y;
     if (visitBottom)
-      checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                              crossedVerticals, CROSSES_END, output);
+      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                      crossedVerticals, CROSSES_END, output);
     // visit the top cell
     cellNr.y += 2;
     if (visitTop)
-      checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                              crossedVerticals, CROSSES_BEGIN, output);
+      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                      crossedVerticals, CROSSES_BEGIN, output);
 
     --cellNr.x;
     if (visitLeft) {
       // visit the top-left cell
       if (visitTop)
-        checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                                CROSSES_END, CROSSES_BEGIN, output);
+        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                        CROSSES_END, CROSSES_BEGIN, output);
       // visit the left cell
       --cellNr.y;
-      checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                              CROSSES_END, crossedHorizontals, output);
+      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold, CROSSES_END,
+                                      crossedHorizontals, output);
       // visit the bottom-left cell
       --cellNr.y;
       if (visitBottom)
-        checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                                CROSSES_END, CROSSES_END, output);
+        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                        CROSSES_END, CROSSES_END, output);
       cellNr.y += 2;
     }
 
@@ -831,65 +848,66 @@ private:
     if (visitRight) {
       // visit the top-right cell
       if (visitTop)
-        checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                                CROSSES_BEGIN, CROSSES_BEGIN, output);
+        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                        CROSSES_BEGIN, CROSSES_BEGIN, output);
       // visit the right cell
       --cellNr.y;
-      checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                              CROSSES_BEGIN, crossedHorizontals, output);
+      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                      CROSSES_BEGIN, crossedHorizontals,
+                                      output);
       // visit the bottom-right cell
       --cellNr.y;
       if (visitBottom)
-        checkCell<left, bottom>(cellNr, queryMBR, threshold,
-                                CROSSES_BEGIN, CROSSES_END, output);
+        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
+                                        CROSSES_BEGIN, CROSSES_END, output);
     }
   }
 
   template <bool left, bool bottom, typename Output>
-  void checkCell(const CellNr& cellNr, const MBR& queryMBR, double threshold,
+  void checkCell(const CellNr &cellNr, const MBR &queryMBR, double threshold,
                  Crossings crossedVerticals, Crossings crossedHorizontals,
-                 Output& output) const {
+                 Output &output) const {
     // ensure that the cell containts some trajectories
-    Map::const_iterator iter = _map.find(cellNr);
+    typename Map::const_iterator iter = _map.find(cellNr);
     if (iter == _map.end())
       return;
 
-    const Cell& cell = iter->second;
+    const Cell &cell = iter->second;
     // traverse the contained trajectories according to the sorting order
     if (cell.xSorted) {
-      traverseBucket<true, left>(cell.bucket, queryMBR, threshold,
-                                 crossedVerticals, output);
+      this->template traverseBucket<true, left, Output>(
+          cell.bucket, queryMBR, threshold, crossedVerticals, output);
     } else {
-      traverseBucket<false, bottom>(cell.bucket, queryMBR, threshold,
-                                    crossedHorizontals, output);
+      this->template traverseBucket<false, bottom, Output>(
+          cell.bucket, queryMBR, threshold, crossedHorizontals, output);
     }
   }
 
   template <bool xDim, bool firstBorder, typename Output>
-  void traverseBucket(const Cell::Bucket& bucket, const MBR& queryMBR,
+  void traverseBucket(const typename Cell::Bucket &bucket, const MBR &queryMBR,
                       double threshold, Crossings crossedBorders,
-                      bool& anyTrajectoryWithinRange,
-                      Output& output) const {
-    if (bucket.size() < MIN_SORT_SIZE) {
+                      Output &output) const {
+    if (bucket.size() < MIN_SORT_SIZE || !_optimized) {
       // check each trajectory of this cell,
       // as they are not sorted
-      for (const Trajectory& trajectory : bucket) {
-        checkTrajectory<false, false, false>(
-            queryMBR, threshold, trajectory, output);
+      for (const MBR &trajectory : bucket) {
+        checkTrajectory<false, false, false>(queryMBR, threshold, trajectory,
+                                             output);
       }
-    } else {  // the trajectories are sorted
+    } else { // the trajectories are sorted
       // choose the traversing order and beginning depending on
       // which cell borders are crossed
       if (crossedBorders == CROSSES_END) {
         // traverse the trajectories backwards,
         // until the beginning of the active range is reached
         double activeRangeBegin =
-            queryMBR.getBorder<xDim, firstBorder>() - threshold;
+            queryMBR.template getBorder<xDim, firstBorder>() - threshold;
         for (size_t i = bucket.size() - 1;
-             bucket[i].getBorder<xDim, firstBorder>() >= activeRangeBegin;
+             bucket[i].template getBorder<xDim, firstBorder>() >=
+             activeRangeBegin;
              --i) {
-          checkTrajectory<true, xDim, firstBorder>(
-            queryMBR, threshold, bucket[i], output);
+          checkTrajectory<true, xDim, firstBorder>(queryMBR, threshold,
+                                                   bucket[i], output);
 
           if (i == 0) {
             break;
@@ -906,21 +924,21 @@ private:
         // i. e., left or bottom, cell border
         if (crossedBorders == CROSSES_NONE) {
           double activeRangeBegin =
-            queryMBR.getBorder<xDim, firstBorder>() - threshold;
+              queryMBR.template getBorder<xDim, firstBorder>() - threshold;
           // decide whether to find the beginning of the active range
           // by binary searching or linear searching
           if (useBinarySearch(bucket.size(), threshold)) {
             // binary search for the beginning of the active range
             searchBegin = std::lower_bound(
-                            searchBegin, searchEnd, activeRangeBegin,
-                            [](const MBR& m, double d) {
-                              return m.getBorder<xDim, firstBorder>() < d;
-                            });
+                searchBegin, searchEnd, activeRangeBegin,
+                [](const MBR &m, double d) {
+                  return m.template getBorder<xDim, firstBorder>() < d;
+                });
           } else {
             // linear search for the beginning of the active range
             while (searchBegin != searchEnd &&
-                   searchBegin->getBorder<xDim, firstBorder>() <
-                   activeRangeBegin) {
+                   searchBegin->template getBorder<xDim, firstBorder>() <
+                       activeRangeBegin) {
               ++searchBegin;
             }
           }
@@ -929,31 +947,76 @@ private:
         // traverse the trajectories forwards,
         // until the end of the active range is reached
         double activeRangeEnd =
-          queryMBR.getBorder<xDim, firstBorder>() + threshold;
+            queryMBR.template getBorder<xDim, firstBorder>() + threshold;
         while (searchBegin != searchEnd &&
-               searchBegin->getBorder<xDim, firstBorder>() <=
-               activeRangeEnd) {
-          checkTrajectory<true, xDim, firstBorder>(
-              queryMBR, threshold, *searchBegin, output);
+               searchBegin->template getBorder<xDim, firstBorder>() <=
+                   activeRangeEnd) {
+          checkTrajectory<true, xDim, firstBorder>(queryMBR, threshold,
+                                                   *searchBegin, output);
           ++searchBegin;
         }
       }
     }
   }
 
-  template <bool prechecked, bool xDim, bool firstBorder, Output>
-  void checkTrajectory(const MBR& queryMBR, double threshold, const MBR& trajMBR,
-                       Output& output) const {
+  template <bool prechecked, bool xDim, bool firstBorder, typename Output>
+  void checkTrajectory(const MBR &queryMBR, double threshold,
+                       const MBR &trajMBR, Output &output) const {
     // ensure that all bounding box borders are within range
-    if (doBBsApproxMatch<prechecked, xDim, firstBorder>(queryMBR, trajMBR)) {
+    if (mbrsWithinRange<prechecked, xDim, firstBorder>(queryMBR, threshold,
+                                                       trajMBR)) {
       // append the dataset trajectory to the output,
       // if it is within Frechet distance of the query trajectory
       if (squaredfarthestBBDistance(queryMBR, trajMBR) <=
-            threshold * threshold ||
-          decider.isBoundedBy(queryMBR.trajectory, trajMBR.trajectory, threshold)) {
-        output.push_back(trajMBR.trajectory);
+              threshold * threshold ||
+          _decider.isBoundedBy(queryMBR.trajectory, trajMBR.trajectory,
+                               threshold)) {
+        output.push_back(&(trajMBR.trajectory));
       }
     }
+  }
+
+  template <bool prechecked, bool xDim, bool firstBorder>
+  bool mbrsWithinRange(const MBR &queryMBR, double threshold,
+                       const MBR &trajMBR) const {
+    if (prechecked) {
+      // ensure that the three bounding box borders that have not been
+      // checked, yet, are within range
+      return bordersWithinRange<!xDim, !firstBorder>(queryMBR, threshold,
+                                                     trajMBR) &&
+             bordersWithinRange<xDim, !firstBorder>(queryMBR, threshold,
+                                                    trajMBR) &&
+             bordersWithinRange<!xDim, !firstBorder>(queryMBR, threshold,
+                                                     trajMBR);
+    } else {
+      // ensure that all bounding box borders are within range
+      return bordersWithinRange<true, true>(queryMBR, threshold, trajMBR) &&
+             bordersWithinRange<true, false>(queryMBR, threshold, trajMBR) &&
+             bordersWithinRange<false, true>(queryMBR, threshold, trajMBR) &&
+             bordersWithinRange<false, false>(queryMBR, threshold, trajMBR);
+    }
+  }
+
+  template <bool xDim, bool firstBorder>
+  bool bordersWithinRange(const MBR &queryMBR, double threshold,
+                          const MBR &trajMBR) const {
+    return queryMBR.template getBorder<xDim, firstBorder>() - threshold <=
+               trajMBR.template getBorder<xDim, firstBorder>() &&
+           trajMBR.template getBorder<xDim, firstBorder>() <=
+               queryMBR.template getBorder<xDim, firstBorder>() + threshold;
+  }
+
+  double squaredfarthestBBDistance(const MBR &queryMBR,
+                                   const MBR &trajMBR) const {
+    double dx1 = trajMBR.template getBorder<true, false>() -
+                 queryMBR.template getBorder<true, true>();
+    double dx2 = queryMBR.template getBorder<true, false>() -
+                 trajMBR.template getBorder<true, true>();
+    double dy1 = trajMBR.template getBorder<false, false>() -
+                 queryMBR.template getBorder<false, true>();
+    double dy2 = queryMBR.template getBorder<false, false>() -
+                 trajMBR.template getBorder<false, true>();
+    return std::max(dx1 * dx1, dx2 * dx2) + std::max(dy1 * dy1, dy2 * dy2);
   }
 
   bool useBinarySearch(size_t bucketSize, double threshold) const {
