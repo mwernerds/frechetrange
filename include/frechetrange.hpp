@@ -18,13 +18,16 @@
 *
 *   Namespaces:
 *
-*     frechetrange       contains boilerplate and unifying code making all
-* relevant aspects of the submissions accessible with a single interface.
-*          detail             contains implementation details of the three
-* approaches well-isolated
-*               duetschvarhenhold
-*               submission2
-*               submission3
+*     frechetrange      contains boilerplate and unifying code making all
+*                       relevant aspects of the submissions accessible with a
+*                       single interface.
+*         detail            contains implementation details of the three
+*                           approaches well-isolated
+*             duetschvarhenhold
+*                 class FrechetDistance
+*                 class Grid
+*             submission2
+*             submission3
 *
 *
 */
@@ -459,11 +462,11 @@ template <typename Trajectory, typename squareddistancefunctional,
 class Grid {
 public:
   /**
-  * Creates a grid of mesh size epsilon.
+  * Creates a grid of the specified mesh size.
   */
-  Grid(double epsilon, squareddistancefunctional squaredDistance,
+  Grid(double meshSize, squareddistancefunctional squaredDistance,
        xgetterfunctional xGetter, ygetterfunctional yGetter)
-      : _epsilon(epsilon), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
+      : _meshSize(meshSize), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
         _useLeftBorder(), _useBottomBorder(), _optimized(false),
         _decider(squaredDistance, xGetter, yGetter), _getX(xGetter),
         _getY(yGetter) {}
@@ -475,12 +478,16 @@ public:
   /**
   * Returns the mesh size of this grid.
   */
-  double getEpsilon() const { return _epsilon; }
+  double getMeshSize() const { return _meshSize; }
 
-  void reserve(size_t trajectories) {
+  /**
+  * Reserves internal storage so that the indicated number
+  * of inserts can be performed without resizing.
+  */
+  void reserve(size_t numTrajectories) {
     for (size_t i = 0; i < NUM_MAPS; ++i) {
       if (!_optimized || i == toMapIndex(_useLeftBorder, _useBottomBorder))
-        _maps[i].reserve(trajectories);
+        _maps[i].reserve(numTrajectories);
     }
   }
 
@@ -494,6 +501,11 @@ public:
       insertImpl(MBR(std::move(trajectory), _getX, _getY));
   }
 
+  /**
+  * Determines which MBR corner to use during hashing to minimize
+  * the expected query cost. Furthermore, the grid cells are sorted
+  * to achieve better query times.
+  */
   void optimize() {
     if (_optimized)
       return;
@@ -531,14 +543,14 @@ public:
 
   /**
   * @param output Supports the method operator()(const Trajectory *)
-  * to output the result trajectories.
+  *               to output the result trajectories.
   */
   template <typename OutputFunctional>
   void rangeQuery(const Trajectory &query, double distanceThreshold,
                   OutputFunctional &output) {
     if (query.size() == 0)
       return;
-    else if (distanceThreshold > _epsilon)
+    else if (distanceThreshold > _meshSize)
       throw std::invalid_argument(
           "The distance threshold is grater than the mesh size.");
 
@@ -735,7 +747,7 @@ private:
   /**
   * Mesh size of this grid, i. e., the side length of cells
   */
-  double _epsilon;
+  double _meshSize;
   using Map = std::unordered_map<CellNr, Cell, CellHasher>;
   static constexpr size_t NUM_MAPS = 4;
   /**
@@ -770,10 +782,10 @@ private:
   ygetterfunctional _getY;
 
   long long toCellNr(double pointCoord) {
-    return static_cast<long long>(std::floor(pointCoord / _epsilon));
+    return static_cast<long long>(std::floor(pointCoord / _meshSize));
   }
   double toCellCoord(double pointCoord) {
-    return std::floor(pointCoord / _epsilon) * _epsilon;
+    return std::floor(pointCoord / _meshSize) * _meshSize;
   }
 
   size_t toMapIndex(bool left, bool bottom) const {
@@ -863,7 +875,7 @@ private:
     bool visitLeft =
         queryMBR.template getBorder<true, left>() - threshold < cellCoordX;
     bool visitRight = queryMBR.template getBorder<true, left>() + threshold >=
-                      cellCoordX + _epsilon;
+                      cellCoordX + _meshSize;
 
     // check which vertical neighbor cells need to be visited
     double cellCoordY =
@@ -871,7 +883,7 @@ private:
     bool visitBottom =
         queryMBR.template getBorder<false, bottom>() - threshold < cellCoordY;
     bool visitTop = queryMBR.template getBorder<false, bottom>() + threshold >=
-                    cellCoordY + _epsilon;
+                    cellCoordY + _meshSize;
 
     // memorize the crossed cell borders
     Crossings crossedVerticals =
@@ -1099,10 +1111,10 @@ private:
     // minimal number of elements to choose binary over linear search
     constexpr size_t MIN_BINARY_SEARCH_SIZE = 32;
     // expected ratio of elements of this bucket to skip;
-    // it is not negative, as _epsilon > 2*threshold
+    // it is not negative, as _meshSize > 2*threshold
     // otherwise, a cell border would be crossed and
     // this method would not be called
-    double expectedRatioElemsToSkip = 0.5 - threshold / _epsilon;
+    double expectedRatioElemsToSkip = 0.5 - threshold / _meshSize;
     return expectedRatioElemsToSkip * bucketSize >= MIN_BINARY_SEARCH_SIZE;
   }
 };

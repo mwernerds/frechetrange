@@ -38,10 +38,9 @@ int main(int argc, char **argv) {
   grid.reserve(2); // not mandatory, but adviced in case of many inserts
   grid.insert(t1);
   grid.insert(t2);
-  grid.optimize(); // not mandatory, but adviced after completing all/most
-                   // inserts
+  grid.optimize(); // not mandatory, but adviced after completing all/most inserts
 
-  // first overload of rangeQuery: returning the result set
+  // first version of rangeQuery: returning the result set
   auto results = grid.rangeQuery(q1, distThreshold1);
 
   cout << "Data trajectories within Frechet distance " << distThreshold1
@@ -52,7 +51,7 @@ int main(int argc, char **argv) {
     cout << endl;
   }
 
-  // second overload of rangeQuery: using an output funcional
+  // second version of rangeQuery: using an output functional
   cout << endl;
   cout << "Data trajectories within Frechet distance " << distThreshold2
        << " of q2:" << endl;
