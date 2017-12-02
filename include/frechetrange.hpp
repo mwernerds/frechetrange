@@ -50,8 +50,8 @@ namespace duetschvahrenhold {
 */
 static constexpr double BEGIN_NOT_REACHABLE = 2.0;
 
-template <typename Trajectory, typename squareddistancefunctional,
-          typename xgetterfunctional, typename ygetterfunctional>
+template <typename squareddistancefunctional, typename xgetterfunctional,
+          typename ygetterfunctional>
 class FrechetDistance {
 public:
   FrechetDistance(squareddistancefunctional squaredDistance,
@@ -67,6 +67,7 @@ public:
   * by the passed upper bound.
   * @pre Neither of the trajectories is empty.
   */
+  template <typename Trajectory>
   bool isBoundedBy(const Trajectory &traj1, const Trajectory &traj2,
                    const double distanceBound) {
     const double boundSquared = distanceBound * distanceBound;
@@ -116,7 +117,7 @@ private:
   * Decides the Fréchet distance problem for a trajectory consisting of only
   * one point.
   */
-  template <typename point_type>
+  template <typename Trajectory, typename point_type>
   bool comparePointToTrajectory(const point_type &p,
                                 const Trajectory &trajectory,
                                 const double boundSquared) {
@@ -135,6 +136,7 @@ private:
   * such that each matching is within the passed distance bound and the
   * sequence of segment points is monotone.
   */
+  template <typename Trajectory>
   bool matchInnerPointsMonotonously(const Trajectory &points,
                                     const Trajectory &segments,
                                     double boundSquared) const {
@@ -190,6 +192,7 @@ private:
   * @pre Both trajectories consist of at least two points
   *      and the starting and ending points are within distance.
   */
+  template <typename Trajectory>
   bool traverseFreeSpaceDiagram(const Trajectory &p1, const Trajectory &p2,
                                 const double boundSquared) {
     // init the beginnings of reachable parts of the "frontline",
@@ -759,8 +762,8 @@ private:
   */
   bool _optimized;
 
-  mutable FrechetDistance<Trajectory, squareddistancefunctional,
-                          xgetterfunctional, ygetterfunctional>
+  mutable FrechetDistance<squareddistancefunctional, xgetterfunctional,
+                          ygetterfunctional>
       _decider;
   squareddistancefunctional _squaredDistance;
   xgetterfunctional _getX;
@@ -1042,9 +1045,9 @@ private:
       // if it is within Fréchet distance of the query trajectory
       if (squaredfarthestBBDistance(queryMBR, trajMBR) <=
               threshold * threshold ||
-          _decider.isBoundedBy(queryMBR.trajectory, trajMBR.trajectory,
-                               threshold)) {
-        output.push_back(&(trajMBR.trajectory));
+          _decider.template isBoundedBy<Trajectory>(
+              queryMBR.trajectory, trajMBR.trajectory, threshold)) {
+        output(&(trajMBR.trajectory));
       }
     }
   }

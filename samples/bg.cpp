@@ -41,7 +41,6 @@ int main(int argc, char **argv) {
 
     // instantiate some decider, this time fully specified.
     frechetrange::detail::duetschvahrenhold::FrechetDistance<
-      linestring_type, // the trajectory type
       std::function<double(point_type, point_type)>, // the squared distance signature
       std::function<double(point_type)>, // the X getter signature
       std::function<double(point_type)> > // the Y getter signature
