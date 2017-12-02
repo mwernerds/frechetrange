@@ -30,6 +30,7 @@
 */
 
 #include <algorithm> // for std::sort, std::lower_bound, std::upper_bound, and std::max
+#include <array>
 #include <cmath>      // for std::floor
 #include <cstddef>    // for std::size_t
 #include <functional> // for std::hash
@@ -62,7 +63,7 @@ public:
   ~FrechetDistance() { delete[] _leftSegmentBegins; }
 
   /**
-  * Returns whether the Frechet distance of the passed trajectories is bounded
+  * Returns whether the Fréchet distance of the passed trajectories is bounded
   * by the passed upper bound.
   * @pre Neither of the trajectories is empty.
   */
@@ -112,7 +113,7 @@ private:
   size_t _capacity;
 
   /**
-  * Decides the Frechet distance problem for a trajectory consisting of only
+  * Decides the Fréchet distance problem for a trajectory consisting of only
   * one point.
   */
   template <typename point_type>
@@ -184,7 +185,7 @@ private:
   }
 
   /**
-  * Returns whether the Frechet distance of the passed trajectories is bounded
+  * Returns whether the Fréchet distance of the passed trajectories is bounded
   * by the upper bound.
   * @pre Both trajectories consist of at least two points
   *      and the starting and ending points are within distance.
@@ -459,8 +460,8 @@ public:
   */
   Grid(double epsilon, squareddistancefunctional squaredDistance,
        xgetterfunctional xGetter, ygetterfunctional yGetter)
-      : _epsilon(epsilon), _map(), _optimized(false), _useLeftBorder(true),
-        _useBottomBorder(true), _expectedQueryCost(0),
+      : _epsilon(epsilon), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
+        _useLeftBorder(), _useBottomBorder(), _optimized(false),
         _decider(squaredDistance, xGetter, yGetter), _getX(xGetter),
         _getY(yGetter) {}
   Grid(const Grid &) = default;
@@ -473,31 +474,44 @@ public:
   */
   double getEpsilon() const { return _epsilon; }
 
-  void reserve(size_t trajectories) { _map.reserve(trajectories); }
-  void insert(const Trajectory &trajectory) {
-    // TODO: insert in multiple grids
-    if (trajectory.size() > 0)
-      this->template insert<true, true>(MBR(trajectory, _getX, _getY));
+  void reserve(size_t trajectories) {
+    for (size_t i = 0; i < NUM_MAPS; ++i) {
+      if (!_optimized || i == toMapIndex(_useLeftBorder, _useBottomBorder))
+        _maps[i].reserve(trajectories);
+    }
   }
+
+  void insert(const Trajectory &trajectory) {
+    if (trajectory.size() > 0)
+      insertImpl(MBR(trajectory, _getX, _getY));
+  }
+
   void insert(Trajectory &&trajectory) {
     if (trajectory.size() > 0)
-      this->template insert<true, true>(
-          MBR(std::move(trajectory), _getX, _getY));
+      insertImpl(MBR(std::move(trajectory), _getX, _getY));
   }
-  void optimize() {
-    // only keep the grid with the best expected performance
-    // TODO
 
-    // sort cells
+  void optimize() {
+    if (_optimized)
+      return;
+
+    // only keep the grid with the best expected performance
+    chooseBestMap();
+    for (size_t i = 0; i < NUM_MAPS; ++i) {
+      if (i != toMapIndex(_useLeftBorder, _useBottomBorder))
+        _maps[i].clear();
+    }
+
+    // sort the grid cells
     if (_useLeftBorder)
       if (_useBottomBorder)
-        this->template sortCells<true, true>();
+        sortCells<true, true>();
       else
-        this->template sortCells<true, false>();
+        sortCells<true, false>();
     else if (_useBottomBorder)
-      this->template sortCells<false, true>();
+      sortCells<false, true>();
     else
-      this->template sortCells<false, false>();
+      sortCells<false, false>();
 
     _optimized = true;
   }
@@ -505,36 +519,42 @@ public:
   std::vector<const Trajectory *> rangeQuery(const Trajectory &query,
                                              double distanceThreshold) {
     std::vector<const Trajectory *> resultSet;
-    rangeQuery(query, distanceThreshold, resultSet);
+    auto pushBackResult = [&resultSet](const Trajectory *t) {
+      resultSet.push_back(t);
+    };
+    rangeQuery(query, distanceThreshold, pushBackResult);
     return resultSet;
   }
 
   /**
-  * @param output Supports the method push_back to write constant pointers to
-  * the result trajectories.
+  * @param output Supports the method operator()(const Trajectory *)
+  * to output the result trajectories.
   */
-  template <typename Output>
+  template <typename OutputFunctional>
   void rangeQuery(const Trajectory &query, double distanceThreshold,
-                  Output &output) {
+                  OutputFunctional &output) {
     if (query.size() == 0)
       return;
     else if (distanceThreshold > _epsilon)
       throw std::invalid_argument(
           "The distance threshold is grater than the mesh size.");
 
+    if (!_optimized)
+      chooseBestMap();
+
     if (_useLeftBorder)
       if (_useBottomBorder)
-        this->template query<true, true, Output>(query, distanceThreshold,
-                                                 output);
+        this->template query<true, true, OutputFunctional>(
+            query, distanceThreshold, output);
       else
-        this->template query<true, false, Output>(query, distanceThreshold,
-                                                  output);
+        this->template query<true, false, OutputFunctional>(
+            query, distanceThreshold, output);
     else if (_useBottomBorder)
-      this->template query<false, true, Output>(query, distanceThreshold,
-                                                output);
+      this->template query<false, true, OutputFunctional>(
+          query, distanceThreshold, output);
     else
-      this->template query<false, false, Output>(query, distanceThreshold,
-                                                 output);
+      this->template query<false, false, OutputFunctional>(
+          query, distanceThreshold, output);
   }
 
 private:
@@ -549,6 +569,7 @@ private:
   };
 
   struct MBR {
+    // TODO: evaluate using pointer instead
     Trajectory trajectory;
     /**
     * Coordinates of the borders of the bounding box
@@ -596,7 +617,6 @@ private:
     * @tparam first Whether the first (i. e., left resp. bottom) or
     *               second (i.e., right resp. top) border is returned
     */
-    // TODO
     template <bool xDim, bool first> double getBorder() const {
       // the compiler hopefully eliminates the branches
       if (xDim)
@@ -714,11 +734,16 @@ private:
   */
   double _epsilon;
   using Map = std::unordered_map<CellNr, Cell, CellHasher>;
+  static constexpr size_t NUM_MAPS = 4;
   /**
-  * Map from 2D cell coordinates to cells of dataset trajectories.
+  * Map from the 2D coordinates to cells of dataset trajectories
+  * for each of the four MBR corners.
   */
-  Map _map;
-  bool _optimized;
+  std::array<Map, NUM_MAPS> _maps;
+  /**
+  * Sum of squared cell sizes of each mapping.
+  */
+  std::array<size_t, NUM_MAPS> _expectedQueryCost;
   /**
   * Whether the bounding box corner, according to which queries are mapped to
   * grid cells, lies on the left (or right) border of the bounding box.
@@ -730,10 +755,9 @@ private:
   */
   bool _useBottomBorder;
   /**
-  * Sum of squared cell sizes.
+  * Whether the cells have been sorted.
   */
-  size_t _expectedQueryCost;
-  // TODO: multiple maps for different MBR corners
+  bool _optimized;
 
   mutable FrechetDistance<Trajectory, squareddistancefunctional,
                           xgetterfunctional, ygetterfunctional>
@@ -749,11 +773,34 @@ private:
     return std::floor(pointCoord / _epsilon) * _epsilon;
   }
 
-  template <bool left, bool bottom> void insert(MBR &&mbr) {
+  size_t toMapIndex(bool left, bool bottom) const {
+    return 2 * static_cast<size_t>(left) + static_cast<size_t>(bottom);
+  }
+
+  void insertImpl(MBR &&mbr) {
+    if (!_optimized) {
+      insertInMap<false, false>(MBR(mbr));
+      insertInMap<false, true>(MBR(mbr));
+      insertInMap<true, false>(MBR(mbr));
+      insertInMap<true, true>(std::move(mbr));
+    } else {
+      if (_useLeftBorder)
+        if (_useBottomBorder)
+          insertInMap<true, true>(std::move(MBR(mbr)));
+        else
+          insertInMap<true, false>(std::move(MBR(mbr)));
+      else if (_useBottomBorder)
+        insertInMap<false, true>(std::move(MBR(mbr)));
+      else
+        insertInMap<false, false>(std::move(MBR(mbr)));
+    }
+  }
+
+  template <bool left, bool bottom> void insertInMap(MBR &&mbr) {
     // integer coordinates of the grid cell
     CellNr cellNr{toCellNr(mbr.template getBorder<true, left>()),
                   toCellNr(mbr.template getBorder<false, bottom>())};
-    Cell &cell = _map[cellNr];
+    Cell &cell = _maps[toMapIndex(left, bottom)][cellNr];
     typename Cell::Bucket &bucket = cell.bucket;
 
     if (!_optimized) {
@@ -761,7 +808,7 @@ private:
       bucket.emplace_back(std::move(mbr));
       // update the sum of squared bucket sizes:
       // (b + 1)^2 = b^2 + 2*(b+1) - 1
-      _expectedQueryCost += 2 * bucket.size() - 1;
+      _expectedQueryCost[toMapIndex(left, bottom)] += 2 * bucket.size() - 1;
     } else {
       // insert in the sorted bucket
       auto insertPos = cell.xSorted
@@ -773,8 +820,32 @@ private:
     }
   }
 
+  void chooseBestMap() {
+    // find the map with best expected query cost
+    size_t lowestCost = _expectedQueryCost[0];
+    _useLeftBorder = _useBottomBorder = false;
+
+    if (_expectedQueryCost[1] < lowestCost) {
+      lowestCost = _expectedQueryCost[1];
+      _useLeftBorder = false;
+      _useBottomBorder = true;
+    }
+
+    if (_expectedQueryCost[2] < lowestCost) {
+      lowestCost = _expectedQueryCost[2];
+      _useLeftBorder = true;
+      _useBottomBorder = false;
+    }
+
+    if (_expectedQueryCost[3] < lowestCost) {
+      lowestCost = _expectedQueryCost[3];
+      _useLeftBorder = true;
+      _useBottomBorder = true;
+    }
+  }
+
   template <bool left, bool bottom> void sortCells() {
-    for (auto &iter : _map) {
+    for (auto &iter : _maps[toMapIndex(left, bottom)]) {
       Cell &cell = iter.second;
       if (cell.bucket.size() >= MIN_SORT_SIZE)
         cell.template sort<left, bottom>();
@@ -867,9 +938,10 @@ private:
   void checkCell(const CellNr &cellNr, const MBR &queryMBR, double threshold,
                  Crossings crossedVerticals, Crossings crossedHorizontals,
                  Output &output) const {
+    const Map &map = _maps[toMapIndex(left, bottom)];
     // ensure that the cell containts some trajectories
-    typename Map::const_iterator iter = _map.find(cellNr);
-    if (iter == _map.end())
+    typename Map::const_iterator iter = map.find(cellNr);
+    if (iter == map.end())
       return;
 
     const Cell &cell = iter->second;
@@ -959,14 +1031,15 @@ private:
     }
   }
 
-  template <bool prechecked, bool xDim, bool firstBorder, typename Output>
+  template <bool prechecked, bool xDim, bool firstBorder,
+            typename OutputFunctional>
   void checkTrajectory(const MBR &queryMBR, double threshold,
-                       const MBR &trajMBR, Output &output) const {
+                       const MBR &trajMBR, OutputFunctional &output) const {
     // ensure that all bounding box borders are within range
     if (mbrsWithinRange<prechecked, xDim, firstBorder>(queryMBR, threshold,
                                                        trajMBR)) {
       // append the dataset trajectory to the output,
-      // if it is within Frechet distance of the query trajectory
+      // if it is within Fréchet distance of the query trajectory
       if (squaredfarthestBBDistance(queryMBR, trajMBR) <=
               threshold * threshold ||
           _decider.isBoundedBy(queryMBR.trajectory, trajMBR.trajectory,
