@@ -43,7 +43,6 @@ For now, only the details interfaces are available. You need to specify explicit
 following line from sample/bg.cpp
 ```
     frechetrange::detail::duetschvahrenhold::FrechetDistance<
-      linestring_type, // the trajectory type
       std::function<double(point_type, point_type)>, // the squared distance signature
       std::function<double(point_type)>, // the X getter signature
       std::function<double(point_type)> > // the Y getter signature
@@ -54,10 +53,9 @@ following line from sample/bg.cpp
       );
 
 ```
-As you can see, the type linestring_type is being used and we give lambda-expressions for the three needed functionals squared_distance (comparable_distance
-in boost::geometry is some fast implementation of a distance such that compare is correct. It is the squared distance for Euclidean geometries, but might
-be something different for other geometries. Additionally, we forward the boost::geometry getter for X and Y as the second and third constructor
-parameters.
+As you can see, we give lambda-expressions for the three needed functionals squared_distance (comparable_distance in boost::geometry is some
+fast implementation of a distance such that compare is correct). It is the squared distance for Euclidean geometries, but might be something
+different for other geometries. Additionally, we forward the boost::geometry getter for X and Y as the second and third constructor parameters.
 
 After constructing this object, it can be used quite cleanly, for example as in
 ```
@@ -81,4 +79,4 @@ After constructing this object, it can be used quite cleanly, for example as in
 Martin Werner - boilerplate, R-package, some integration work
 More to come.
 
-Fabian Dütsch - optimization of the Fréchet decider
+Fabian Dütsch - Grid, optimization of the Fréchet decider
