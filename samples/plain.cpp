@@ -57,8 +57,8 @@ int main(int argc, char **argv) {
        << endl;
 
 
-    // now bringman baldus test code
-    frechetrange::detail::bringmanbaldus::FrechetDistance<
+    // now bringman baldus test code, deactivated as it is not ready.
+/*    frechetrange::detail::bringmanbaldus::FrechetDistance<
 	trajectory, trajectory::value_type, double,
 	 std::function<double(point p)>, std::function<double(point p)>,distance_functional_type> fd2(
 	    getx,gety,squared_dist
@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
   for (double d = 1; d < 5; d += 0.25)
     cout << "Reachable2 at " << d << ":\t"
          << (fd2.is_frechet_distance_at_most(t1,t2,d)? "yes" : "no") << endl;
-
+*/
     
        
   return 0;
