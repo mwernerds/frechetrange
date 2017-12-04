@@ -77,8 +77,8 @@ public:
   * @pre Neither of the trajectories is empty.
   */
   template <typename Trajectory>
-  bool isBoundedBy(const Trajectory &traj1, const Trajectory &traj2,
-                   const double distanceBound) {
+  bool isBoundedBy(Trajectory &traj1, Trajectory &traj2,
+                    double distanceBound) {
     const double boundSquared = distanceBound * distanceBound;
 
     // ensure that the corners of the free space diagram are reachable
@@ -88,8 +88,8 @@ public:
       return false;
 
     bool firstIsSmaller = traj1.size() <= traj2.size();
-    const Trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
-    const Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
+    Trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
+    Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
 
     if (smallerTraj.size() == 1) {
       return comparePointToTrajectory(smallerTraj[0], biggerTraj, boundSquared);
@@ -146,9 +146,9 @@ private:
   * sequence of segment points is monotone.
   */
   template <typename Trajectory>
-  bool matchInnerPointsMonotonously(const Trajectory &points,
-                                    const Trajectory &segments,
-                                    double boundSquared) const {
+  bool matchInnerPointsMonotonously( Trajectory &points,
+                                     Trajectory &segments,
+                                    double boundSquared)  {
     // the last point has already been tested
     const size_t pointsToMatchEnd = points.size() - 1;
     const size_t numSegments = segments.size() - 1;
@@ -202,7 +202,7 @@ private:
   *      and the starting and ending points are within distance.
   */
   template <typename Trajectory>
-  bool traverseFreeSpaceDiagram(const Trajectory &p1, const Trajectory &p2,
+  bool traverseFreeSpaceDiagram( Trajectory &p1, Trajectory &p2,
                                 const double boundSquared) {
     // init the beginnings of reachable parts of the "frontline",
     // i.e., the right segments of the column lastly processed
@@ -370,10 +370,10 @@ private:
   *                 if it exists, or unchanged, otherwise.
   */
   template <typename point_type>
-  void getLineCircleIntersections(const point_type &p1, const point_type &p2,
-                                  const point_type &cp,
-                                  const double radiusSquared, double &begin,
-                                  double &end) const {
+  void getLineCircleIntersections(point_type &p1, point_type &p2,
+                                   point_type &cp,
+                                   double radiusSquared, double &begin,
+                                  double &end) {
     // TODO: Adapt to template parameter squareddistancefunctional;
     //       The following assumes the Euclidean distance.
 
@@ -428,7 +428,7 @@ private:
   */
   double getReachableBegin(double currSegmentBegin, double currSegmentEnd,
                            double prevParallelSegBegin,
-                           double prevOrthogonalSegBegin) const {
+                           double prevOrthogonalSegBegin)  {
     if (currSegmentEnd < 0.0) {
       // The segment does not intersect the free space.
       return BEGIN_NOT_REACHABLE;
@@ -457,680 +457,328 @@ private:
   bool isSegmentReachable(double begin) const { return begin <= 1.0; }
 };
 
-/**
-* A grid of fixed mesh size spanning the Euclidean plane.
-* It stores dataset trajectories in its cells to
-* efficiently perform range queries on their MBR corners.
-* Trajectories are mapped to cells using one of the four bounding box corners.
+
+/*
+The grid has been moved to an external file, as it breaks the functional api
+through some problems with const annotations.
+
+The issue is under consideration...
 */
-template <typename Trajectory, typename squareddistancefunctional,
-          typename xgetterfunctional, typename ygetterfunctional>
-class Grid {
-public:
-  /**
-  * Creates a grid of the specified mesh size.
-  */
-  Grid(double meshSize, squareddistancefunctional squaredDistance,
-       xgetterfunctional xGetter, ygetterfunctional yGetter)
-      : _meshSize(meshSize), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
-        _useLeftBorder(), _useBottomBorder(), _optimized(false),
-        _decider(squaredDistance, xGetter, yGetter), _getX(xGetter),
-        _getY(yGetter) {}
-  Grid(const Grid &) = default;
-  Grid(Grid &&) = default;
-  Grid &operator=(const Grid &) = default;
-  Grid &operator=(Grid &&) = default;
 
-  /**
-  * Returns the mesh size of this grid.
-  */
-  double getMeshSize() const { return _meshSize; }
-
-  /**
-  * Reserves internal storage so that the indicated number
-  * of inserts can be performed without resizing.
-  */
-  void reserve(size_t numTrajectories) {
-    for (size_t i = 0; i < NUM_MAPS; ++i) {
-      if (!_optimized || i == toMapIndex(_useLeftBorder, _useBottomBorder))
-        _maps[i].reserve(numTrajectories);
-    }
-  }
-
-  void insert(const Trajectory &trajectory) {
-    if (trajectory.size() > 0)
-      insertImpl(MBR(trajectory, _getX, _getY));
-  }
-
-  void insert(Trajectory &&trajectory) {
-    if (trajectory.size() > 0)
-      insertImpl(MBR(std::move(trajectory), _getX, _getY));
-  }
-
-  /**
-  * Determines which MBR corner to use during hashing to minimize
-  * the expected query cost. Furthermore, the grid cells are sorted
-  * to achieve better query times.
-  */
-  void optimize() {
-    if (_optimized)
-      return;
-
-    // only keep the grid with the best expected performance
-    chooseBestMap();
-    for (size_t i = 0; i < NUM_MAPS; ++i) {
-      if (i != toMapIndex(_useLeftBorder, _useBottomBorder))
-        _maps[i].clear();
-    }
-
-    // sort the grid cells
-    if (_useLeftBorder)
-      if (_useBottomBorder)
-        sortCells<true, true>();
-      else
-        sortCells<true, false>();
-    else if (_useBottomBorder)
-      sortCells<false, true>();
-    else
-      sortCells<false, false>();
-
-    _optimized = true;
-  }
-
-  std::vector<const Trajectory *> rangeQuery(const Trajectory &query,
-                                             double distanceThreshold) {
-    std::vector<const Trajectory *> resultSet;
-    auto pushBackResult = [&resultSet](const Trajectory *t) {
-      resultSet.push_back(t);
-    };
-    rangeQuery(query, distanceThreshold, pushBackResult);
-    return resultSet;
-  }
-
-  /**
-  * @param output Supports the method operator()(const Trajectory *)
-  *               to output the result trajectories.
-  */
-  template <typename OutputFunctional>
-  void rangeQuery(const Trajectory &query, double distanceThreshold,
-                  OutputFunctional &output) {
-    if (query.size() == 0)
-      return;
-    else if (distanceThreshold > _meshSize)
-      throw std::invalid_argument(
-          "The distance threshold is grater than the mesh size.");
-
-    if (!_optimized)
-      chooseBestMap();
-
-    if (_useLeftBorder)
-      if (_useBottomBorder)
-        this->template query<true, true, OutputFunctional>(
-            query, distanceThreshold, output);
-      else
-        this->template query<true, false, OutputFunctional>(
-            query, distanceThreshold, output);
-    else if (_useBottomBorder)
-      this->template query<false, true, OutputFunctional>(
-          query, distanceThreshold, output);
-    else
-      this->template query<false, false, OutputFunctional>(
-          query, distanceThreshold, output);
-  }
-
-private:
-  /**
-  * Integer coordinates of a grid cell
-  */
-  struct CellNr {
-    long long x, y;
-    bool operator==(const CellNr &other) const {
-      return x == other.x && y == other.y;
-    }
-  };
-
-  struct MBR {
-    // TODO: evaluate using pointer instead
-    Trajectory trajectory;
-    /**
-    * Coordinates of the borders of the bounding box
-    */
-    double minX, maxX, minY, maxY;
-
-    MBR(const Trajectory &t, const xgetterfunctional &getX,
-        const ygetterfunctional &getY)
-        : trajectory(t) {
-      initBorders(getX, getY);
-    }
-    MBR(Trajectory &&t, const xgetterfunctional getX,
-        const ygetterfunctional &getY)
-        : trajectory(std::move(t)) {
-      initBorders(getX, getY);
-    }
-    MBR() = default;
-    MBR(const MBR &) = default;
-    MBR(MBR &&) = default;
-    MBR &operator=(const MBR &) = default;
-    MBR &operator=(MBR &) = default;
-
-    void initBorders(const xgetterfunctional &getX,
-                     const ygetterfunctional &getY) {
-      minX = maxX = getX(trajectory[0]);
-      minY = maxY = getY(trajectory[0]);
-
-      for (size_t i = 1; i < trajectory.size(); ++i) {
-        auto xCoord = getX(trajectory[i]);
-        if (xCoord < minX)
-          minX = xCoord;
-        else if (xCoord > maxX)
-          maxX = xCoord;
-
-        auto yCoord = getY(trajectory[i]);
-        if (yCoord < minY)
-          minY = yCoord;
-        else if (yCoord > maxY)
-          maxY = yCoord;
-      }
-    }
-    /**
-    * Returns the coordinate of the specified border of the bounding box.
-    * @tparam xDim Whether a x- or y-coordinate is returned
-    * @tparam first Whether the first (i. e., left resp. bottom) or
-    *               second (i.e., right resp. top) border is returned
-    */
-    template <bool xDim, bool first> double getBorder() const {
-      // the compiler hopefully eliminates the branches
-      if (xDim)
-        if (first)
-          return minX;
-        else
-          return maxX;
-      else if (first)
-        return minY;
-      else
-        return maxY;
-    }
-  };
-
-  /**
-  * Compare MBRs by the specified border coordinate.
-  */
-  template <bool xDim, bool first> struct MBRComparator {
-    bool operator()(const MBR &m1, const MBR &m2) const {
-      return m1.template getBorder<xDim, first>() <
-             m2.template getBorder<xDim, first>();
-    }
-  };
-
-  /**
-  * Cell of the grid
-  */
-  struct Cell {
-    using Bucket = std::vector<MBR>;
-    /**
-    * Whether this cell is sorted by x- or y-coordinates
-    */
-    bool xSorted;
-    /**
-    * List of dataset trajectories stored in this grid cell
-    */
-    Bucket bucket;
-
-    Cell() = default;
-    Cell(const Cell &) = default;
-    Cell(Cell &&) = default;
-    Cell &operator=(const Cell &) = default;
-    Cell &operator=(Cell &) = default;
-
-    template <bool left, bool bottom> void sort() {
-      // decide whether to sort by x- or y-coordinates
-      xSorted = chooseSortingOrder<left, bottom>();
-      if (xSorted)
-        std::sort(bucket.begin(), bucket.end(), MBRComparator<true, left>());
-      else
-        std::sort(bucket.begin(), bucket.end(), MBRComparator<false, bottom>());
-    }
-    template <bool left, bool bottom> bool chooseSortingOrder() {
-      // find extremal MBR corner coordinates
-      double minX = bucket[0].template getBorder<true, left>();
-      double maxX = minX;
-      double minY = bucket[0].template getBorder<false, bottom>();
-      double maxY = minY;
-
-      for (size_t i = 1; i < bucket.size(); ++i) {
-        double x = bucket[i].template getBorder<true, left>();
-        if (x < minX) {
-          minX = x;
-        } else if (x > maxX) {
-          maxX = x;
-        }
-        double y = bucket[i].template getBorder<false, bottom>();
-        if (y < minY) {
-          minY = y;
-        } else if (y > maxY) {
-          maxY = y;
-        }
-      }
-
-      // choose the dimension with greater diffusion as sorting order
-      double xRange = maxX - minX;
-      double yRange = maxY - minY;
-      return xRange >= yRange;
-    }
-  };
-
-  struct CellHasher {
-    size_t operator()(const CellNr &cell) const {
-      std::hash<long long> longHasher;
-      size_t hash = longHasher(cell.x) + 0x9e3779b9;
-      hash ^= longHasher(cell.y) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-      return hash;
-    }
-  };
-
-  /**
-  * Minimal number of containing trajectories for a cell to be sorted.
-  */
-  static constexpr size_t MIN_SORT_SIZE = 16;
-  /**
-  * Describes which horizontal resp. vertical cell borders are crossed
-  * by a range query
-  */
-  using Crossings = unsigned int;
-  /**
-  * No cell border is crossed
-  */
-  static constexpr Crossings CROSSES_NONE = 0;
-  /**
-  * The left resp. bottom cell border is crossed
-  */
-  static constexpr Crossings CROSSES_BEGIN = 2;
-  /**
-  * The right resp. top cell border is crossed
-  */
-  static constexpr Crossings CROSSES_END = 1;
-
-  /**
-  * Mesh size of this grid, i. e., the side length of cells
-  */
-  double _meshSize;
-  using Map = std::unordered_map<CellNr, Cell, CellHasher>;
-  static constexpr size_t NUM_MAPS = 4;
-  /**
-  * Map from the 2D coordinates to cells of dataset trajectories
-  * for each of the four MBR corners.
-  */
-  std::array<Map, NUM_MAPS> _maps;
-  /**
-  * Sum of squared cell sizes of each mapping.
-  */
-  std::array<size_t, NUM_MAPS> _expectedQueryCost;
-  /**
-  * Whether the bounding box corner, according to which queries are mapped to
-  * grid cells, lies on the left (or right) border of the bounding box.
-  */
-  bool _useLeftBorder;
-  /**
-  * Whether the bounding box corner, according to which queries are mapped to
-  * grid cells, lies on the bottom (or top) border of the bounding box.
-  */
-  bool _useBottomBorder;
-  /**
-  * Whether the cells have been sorted.
-  */
-  bool _optimized;
-
-  mutable FrechetDistance<squareddistancefunctional, xgetterfunctional,
-                          ygetterfunctional>
-      _decider;
-  squareddistancefunctional _squaredDistance;
-  xgetterfunctional _getX;
-  ygetterfunctional _getY;
-
-  long long toCellNr(double pointCoord) {
-    return static_cast<long long>(std::floor(pointCoord / _meshSize));
-  }
-  double toCellCoord(double pointCoord) {
-    return std::floor(pointCoord / _meshSize) * _meshSize;
-  }
-
-  size_t toMapIndex(bool left, bool bottom) const {
-    return 2 * static_cast<size_t>(left) + static_cast<size_t>(bottom);
-  }
-
-  void insertImpl(MBR &&mbr) {
-    if (!_optimized) {
-      insertInMap<false, false>(MBR(mbr));
-      insertInMap<false, true>(MBR(mbr));
-      insertInMap<true, false>(MBR(mbr));
-      insertInMap<true, true>(std::move(mbr));
-    } else {
-      if (_useLeftBorder)
-        if (_useBottomBorder)
-          insertInMap<true, true>(std::move(MBR(mbr)));
-        else
-          insertInMap<true, false>(std::move(MBR(mbr)));
-      else if (_useBottomBorder)
-        insertInMap<false, true>(std::move(MBR(mbr)));
-      else
-        insertInMap<false, false>(std::move(MBR(mbr)));
-    }
-  }
-
-  template <bool left, bool bottom> void insertInMap(MBR &&mbr) {
-    // integer coordinates of the grid cell
-    CellNr cellNr{toCellNr(mbr.template getBorder<true, left>()),
-                  toCellNr(mbr.template getBorder<false, bottom>())};
-    Cell &cell = _maps[toMapIndex(left, bottom)][cellNr];
-    typename Cell::Bucket &bucket = cell.bucket;
-
-    if (!_optimized) {
-      // append the trajectory to the cell's bucket
-      bucket.emplace_back(std::move(mbr));
-      // update the sum of squared bucket sizes:
-      // (b + 1)^2 = b^2 + 2*(b+1) - 1
-      _expectedQueryCost[toMapIndex(left, bottom)] += 2 * bucket.size() - 1;
-    } else {
-      // insert in the sorted bucket
-      auto insertPos = cell.xSorted
-                           ? std::upper_bound(bucket.begin(), bucket.end(), mbr,
-                                              MBRComparator<true, left>())
-                           : std::upper_bound(bucket.begin(), bucket.end(), mbr,
-                                              MBRComparator<false, bottom>());
-      bucket.emplace(insertPos, std::move(mbr));
-    }
-  }
-
-  void chooseBestMap() {
-    // find the map with best expected query cost
-    size_t lowestCost = _expectedQueryCost[0];
-    _useLeftBorder = _useBottomBorder = false;
-
-    if (_expectedQueryCost[1] < lowestCost) {
-      lowestCost = _expectedQueryCost[1];
-      _useLeftBorder = false;
-      _useBottomBorder = true;
-    }
-
-    if (_expectedQueryCost[2] < lowestCost) {
-      lowestCost = _expectedQueryCost[2];
-      _useLeftBorder = true;
-      _useBottomBorder = false;
-    }
-
-    if (_expectedQueryCost[3] < lowestCost) {
-      lowestCost = _expectedQueryCost[3];
-      _useLeftBorder = true;
-      _useBottomBorder = true;
-    }
-  }
-
-  template <bool left, bool bottom> void sortCells() {
-    for (auto &iter : _maps[toMapIndex(left, bottom)]) {
-      Cell &cell = iter.second;
-      if (cell.bucket.size() >= MIN_SORT_SIZE)
-        cell.template sort<left, bottom>();
-    }
-  }
-
-  template <bool left, bool bottom, typename Output>
-  void query(const Trajectory &query, double threshold, Output &output) {
-    MBR queryMBR(query, _getX, _getY);
-    // check which horizontal neighbor cells need to be visited
-    double cellCoordX = toCellCoord(queryMBR.template getBorder<true, left>());
-    bool visitLeft =
-        queryMBR.template getBorder<true, left>() - threshold < cellCoordX;
-    bool visitRight = queryMBR.template getBorder<true, left>() + threshold >=
-                      cellCoordX + _meshSize;
-
-    // check which vertical neighbor cells need to be visited
-    double cellCoordY =
-        toCellCoord(queryMBR.template getBorder<false, bottom>());
-    bool visitBottom =
-        queryMBR.template getBorder<false, bottom>() - threshold < cellCoordY;
-    bool visitTop = queryMBR.template getBorder<false, bottom>() + threshold >=
-                    cellCoordY + _meshSize;
-
-    // memorize the crossed cell borders
-    Crossings crossedVerticals =
-        static_cast<Crossings>(visitLeft) * CROSSES_BEGIN +
-        static_cast<Crossings>(visitRight) * CROSSES_END;
-    Crossings crossedHorizontals =
-        static_cast<Crossings>(visitBottom) * CROSSES_BEGIN +
-        static_cast<Crossings>(visitTop) * CROSSES_END;
-
-    // integral coordinates of the cell the query trajectory is mapped to
-    CellNr cellNr{toCellNr(queryMBR.template getBorder<true, left>()),
-                  toCellNr(queryMBR.template getBorder<false, bottom>())};
-
-    // visit the center cell
-    checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                    crossedVerticals, crossedHorizontals,
-                                    output);
-    // visit the bottom cell
-    --cellNr.y;
-    if (visitBottom)
-      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                      crossedVerticals, CROSSES_END, output);
-    // visit the top cell
-    cellNr.y += 2;
-    if (visitTop)
-      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                      crossedVerticals, CROSSES_BEGIN, output);
-
-    --cellNr.x;
-    if (visitLeft) {
-      // visit the top-left cell
-      if (visitTop)
-        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_END, CROSSES_BEGIN, output);
-      // visit the left cell
-      --cellNr.y;
-      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold, CROSSES_END,
-                                      crossedHorizontals, output);
-      // visit the bottom-left cell
-      --cellNr.y;
-      if (visitBottom)
-        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_END, CROSSES_END, output);
-      cellNr.y += 2;
-    }
-
-    cellNr.x += 2;
-    if (visitRight) {
-      // visit the top-right cell
-      if (visitTop)
-        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_BEGIN, CROSSES_BEGIN, output);
-      // visit the right cell
-      --cellNr.y;
-      checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                      CROSSES_BEGIN, crossedHorizontals,
-                                      output);
-      // visit the bottom-right cell
-      --cellNr.y;
-      if (visitBottom)
-        checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_BEGIN, CROSSES_END, output);
-    }
-  }
-
-  template <bool left, bool bottom, typename Output>
-  void checkCell(const CellNr &cellNr, const MBR &queryMBR, double threshold,
-                 Crossings crossedVerticals, Crossings crossedHorizontals,
-                 Output &output) const {
-    const Map &map = _maps[toMapIndex(left, bottom)];
-    // ensure that the cell containts some trajectories
-    typename Map::const_iterator iter = map.find(cellNr);
-    if (iter == map.end())
-      return;
-
-    const Cell &cell = iter->second;
-    // traverse the contained trajectories according to the sorting order
-    if (cell.xSorted) {
-      this->template traverseBucket<true, left, Output>(
-          cell.bucket, queryMBR, threshold, crossedVerticals, output);
-    } else {
-      this->template traverseBucket<false, bottom, Output>(
-          cell.bucket, queryMBR, threshold, crossedHorizontals, output);
-    }
-  }
-
-  template <bool xDim, bool firstBorder, typename Output>
-  void traverseBucket(const typename Cell::Bucket &bucket, const MBR &queryMBR,
-                      double threshold, Crossings crossedBorders,
-                      Output &output) const {
-    if (bucket.size() < MIN_SORT_SIZE || !_optimized) {
-      // check each trajectory of this cell,
-      // as they are not sorted
-      for (const MBR &trajectory : bucket) {
-        checkTrajectory<false, false, false>(queryMBR, threshold, trajectory,
-                                             output);
-      }
-    } else { // the trajectories are sorted
-      // choose the traversing order and beginning depending on
-      // which cell borders are crossed
-      if (crossedBorders == CROSSES_END) {
-        // traverse the trajectories backwards,
-        // until the beginning of the active range is reached
-        double activeRangeBegin =
-            queryMBR.template getBorder<xDim, firstBorder>() - threshold;
-        for (size_t i = bucket.size() - 1;
-             bucket[i].template getBorder<xDim, firstBorder>() >=
-             activeRangeBegin;
-             --i) {
-          checkTrajectory<true, xDim, firstBorder>(queryMBR, threshold,
-                                                   bucket[i], output);
-
-          if (i == 0) {
-            break;
-          }
-        }
-      } else {
-        // traverse the trajectories forwards,
-        // until the end of the active range is reached
-        auto searchBegin = bucket.cbegin();
-        auto searchEnd = bucket.cend();
-
-        // search for the beginning of the active range,
-        // if the range query does not span the first,
-        // i. e., left or bottom, cell border
-        if (crossedBorders == CROSSES_NONE) {
-          double activeRangeBegin =
-              queryMBR.template getBorder<xDim, firstBorder>() - threshold;
-          // decide whether to find the beginning of the active range
-          // by binary searching or linear searching
-          if (useBinarySearch(bucket.size(), threshold)) {
-            // binary search for the beginning of the active range
-            searchBegin = std::lower_bound(
-                searchBegin, searchEnd, activeRangeBegin,
-                [](const MBR &m, double d) {
-                  return m.template getBorder<xDim, firstBorder>() < d;
-                });
-          } else {
-            // linear search for the beginning of the active range
-            while (searchBegin != searchEnd &&
-                   searchBegin->template getBorder<xDim, firstBorder>() <
-                       activeRangeBegin) {
-              ++searchBegin;
-            }
-          }
-        }
-
-        // traverse the trajectories forwards,
-        // until the end of the active range is reached
-        double activeRangeEnd =
-            queryMBR.template getBorder<xDim, firstBorder>() + threshold;
-        while (searchBegin != searchEnd &&
-               searchBegin->template getBorder<xDim, firstBorder>() <=
-                   activeRangeEnd) {
-          checkTrajectory<true, xDim, firstBorder>(queryMBR, threshold,
-                                                   *searchBegin, output);
-          ++searchBegin;
-        }
-      }
-    }
-  }
-
-  template <bool prechecked, bool xDim, bool firstBorder,
-            typename OutputFunctional>
-  void checkTrajectory(const MBR &queryMBR, double threshold,
-                       const MBR &trajMBR, OutputFunctional &output) const {
-    // ensure that all bounding box borders are within range
-    if (mbrsWithinRange<prechecked, xDim, firstBorder>(queryMBR, threshold,
-                                                       trajMBR)) {
-      // append the dataset trajectory to the output,
-      // if it is within Fréchet distance of the query trajectory
-      if (squaredfarthestBBDistance(queryMBR, trajMBR) <=
-              threshold * threshold ||
-          _decider.template isBoundedBy<Trajectory>(
-              queryMBR.trajectory, trajMBR.trajectory, threshold)) {
-        output(&(trajMBR.trajectory));
-      }
-    }
-  }
-
-  template <bool prechecked, bool xDim, bool firstBorder>
-  bool mbrsWithinRange(const MBR &queryMBR, double threshold,
-                       const MBR &trajMBR) const {
-    if (prechecked) {
-      // ensure that the three bounding box borders that have not been
-      // checked, yet, are within range
-      return bordersWithinRange<!xDim, !firstBorder>(queryMBR, threshold,
-                                                     trajMBR) &&
-             bordersWithinRange<xDim, !firstBorder>(queryMBR, threshold,
-                                                    trajMBR) &&
-             bordersWithinRange<!xDim, !firstBorder>(queryMBR, threshold,
-                                                     trajMBR);
-    } else {
-      // ensure that all bounding box borders are within range
-      return bordersWithinRange<true, true>(queryMBR, threshold, trajMBR) &&
-             bordersWithinRange<true, false>(queryMBR, threshold, trajMBR) &&
-             bordersWithinRange<false, true>(queryMBR, threshold, trajMBR) &&
-             bordersWithinRange<false, false>(queryMBR, threshold, trajMBR);
-    }
-  }
-
-  template <bool xDim, bool firstBorder>
-  bool bordersWithinRange(const MBR &queryMBR, double threshold,
-                          const MBR &trajMBR) const {
-    return queryMBR.template getBorder<xDim, firstBorder>() - threshold <=
-               trajMBR.template getBorder<xDim, firstBorder>() &&
-           trajMBR.template getBorder<xDim, firstBorder>() <=
-               queryMBR.template getBorder<xDim, firstBorder>() + threshold;
-  }
-
-  double squaredfarthestBBDistance(const MBR &queryMBR,
-                                   const MBR &trajMBR) const {
-    double dx1 = trajMBR.template getBorder<true, false>() -
-                 queryMBR.template getBorder<true, true>();
-    double dx2 = queryMBR.template getBorder<true, false>() -
-                 trajMBR.template getBorder<true, true>();
-    double dy1 = trajMBR.template getBorder<false, false>() -
-                 queryMBR.template getBorder<false, true>();
-    double dy2 = queryMBR.template getBorder<false, false>() -
-                 trajMBR.template getBorder<false, true>();
-    return std::max(dx1 * dx1, dx2 * dx2) + std::max(dy1 * dy1, dy2 * dy2);
-  }
-
-  bool useBinarySearch(size_t bucketSize, double threshold) const {
-    // minimal number of elements to choose binary over linear search
-    constexpr size_t MIN_BINARY_SEARCH_SIZE = 32;
-    // expected ratio of elements of this bucket to skip;
-    // it is not negative, as _meshSize > 2*threshold
-    // otherwise, a cell border would be crossed and
-    // this method would not be called
-    double expectedRatioElemsToSkip = 0.5 - threshold / _meshSize;
-    return expectedRatioElemsToSkip * bucketSize >= MIN_BINARY_SEARCH_SIZE;
-  }
-};
+#ifdef USE_GRID
+#include "duetsch_vahrenhold_grid.hpp"
+#endif
 } // duetschvahrenhold
 
 
 namespace bringmanbaldus{
 
 
-/*THIS SECTION IS IN BRANCH mwernerds/bb, as it is unexpectedly difficult to resolve. The branch is not yet online...*/
+
+
+
+
+
+
+template<typename curvetype, typename pointtype, typename distancetype,  // types
+	typename xgetterfunctional, typename ygetterfunctional, typename squareddistancefunctional>     // elementary functions
+class FrechetDistance
+{
+
+    private:
+    static constexpr distancetype eps=10e-5;
+    
+    typedef curvetype curve;
+    typedef distancetype distance_t;
+    typedef pointtype point;
+//    typedef typename curve::value_type point; @deprecated as we don't want to fix the ::value_type concept for trajectories in details namespace
+
+    // an actual point proxy for having operators
+    const xgetterfunctional getx;
+    const ygetterfunctional gety;
+    squareddistancefunctional dist2;
+
+// arithmetic was in operators, but this was to tedious for an inner class as getx and gety are not meant to be static.
+// Therefore, transforming to some sort of assembler.
+/*
+   DEPRECATED: As we don't know the class point and we don't want to assume anything about it, we should not operate on it. 
+   Instead, we have to express everything withing getx and gety and distance_type arithmetics. Not beautiful, but flexible.
+   point op_sub(point &a,  point &b)
+   {
+
+      getx(a) -= getx(b);
+      gety(a) -= gety(b);
+      return a;
+   }
+
+    point op_minus( point &a,  point &b)
+    {
+    point tmp(a);
+    getx(tmp)  = getx(a)- getx(b);
+    gety(tmp) = gety(a) - gety(b);
+    return tmp;
+    }
+
+   point op_add(point &a,  point &b)
+{
+    getx(a) += getx(b);
+    gety(a) += gety(b);
+    return a;
+}
+
+    point op_plus( point &a,  point &b)
+{
+    auto tmp = a;
+    op_add(tmp,b);
+    return tmp;
+}
+
+point op_sdiv(point &a, const distance_t d)
+{
+    getx(a) /= d;
+    gety(a) /= d;
+    return a;
+}
+*/
+  template<typename valtype>
+    valtype sqr(valtype a) {return a*a;};
+
+
+
+distance_t dist_sqr(point& a, point& b)
+{
+    return(dist2(a,b));
+}
+
+
+
+    typedef std::pair<distance_t, distance_t> interval; // .first is the startpoint, .second the endpoint (start inclusive, end exclusive)
+
+
+    
+
+
+
+    /*Section 1: special types and their elementary operations*/
+
+     /*point type fun*/
+typedef point vec;
+
+
+    static constexpr interval empty_interval{std::numeric_limits<distance_t>::max(), std::numeric_limits<distance_t>::lowest()};
+
+    /*
+    Actually, this would have had to be a free function. But this would pollute the namespace with an interval. we should remove it when done
+
+    std::ostream& operator<<(std::ostream& out, const interval& i)
+    {
+	out << "[" << i.first << ", " << i.second << "]";
+	return out;
+    }*/
+
+    inline bool is_empty_interval(const interval& i)
+    {
+	return i.first >= i.second;
+    }
+
+/*    void pout(point & p)
+    {
+	std::cout << "POINT("<<p[0]<<";" << p[1] << ")" <<std::endl;
+	std::cout << "POINT*("<<getx(p)<<";" << gety(p) << ")" <<std::endl;
+    }*/
+    
+interval intersection_interval(point circle_center, distance_t radius, point line_start, point line_end)
+{
+    // move the circle center to (0, 0) to simplify the calculation
+//    line_start -= circle_center;
+    distance_t linestartx = getx(line_start)-getx(circle_center);
+    distance_t linestarty = gety(line_start)-gety(circle_center);
+    distance_t lineendx = getx(line_end)-getx(circle_center);
+    distance_t lineendy = gety(line_end)-gety(circle_center);
+   
+
+//    op_sub(line_start,circle_center);
+//    line_end -= circle_center;
+//    op_sub(line_end,circle_center);
+
+    // The line can be represented as line_start + lambda * v
+
+    // Find points p = line_start + lambda * v with
+    //     dist(p, circle_center) = radius
+    // <=> sqrt(p.x^2 + p.y^2) = radius
+    // <=> p.x^2 + p.y^2 = radius^2
+    // <=> (line_start.x + lambda * v.x)^2 + (line_start.y + lambda * v.y)^2 = radius^2
+    // <=> (line_start.x^2 + 2 * line_start.x * lambda * v.x + lambda^2 * v.x^2) + (line_start.y^2 + 2 * line_start.y * lambda * v.y + lambda^2 * v.y^2) = radius^2
+    // <=> lambda^2 * (v.x^2 + v.y^2) + lambda * (2 * line_start.x * v.x + 2 * line_start.y * v.y) + line_start.x^2 + line_start.y^2) - radius^2 = 0
+    // let a := v.x^2 + v.y^2, b := 2 * line_start.x * v.x + 2 * line_start.y * v.y, c := line_start.x^2 + line_start.y^2 - radius^2
+    // <=> lambda^2 * a + lambda * b + c) = 0
+    // <=> lambda^2 + (b / a) * lambda + c / a) = 0
+    // <=> lambda1/2 = - (b / 2a) +/- sqrt((b / 2a)^2 - c / a)
+
+     distance_t a = sqr((getx(line_end)-getx(line_start))) + sqr((gety(line_end)-gety(line_start)));
+     distance_t b = (linestartx * (lineendx-linestartx) + linestarty * (lineendy-linestarty));
+     distance_t c = sqr(linestartx) + sqr(linestarty) - sqr(radius);
+
+     distance_t discriminant = sqr(b / a) - c / a;
+
+    if (discriminant < 0) {
+        return empty_interval; // no intersection;
+    }
+
+     distance_t lambda1 = - b / a - sqrt(discriminant);
+     distance_t lambda2 = - b / a + sqrt(discriminant);
+
+    if (lambda2 < 0 || lambda1 > 1) return empty_interval;
+    else return {std::max<distance_t>(lambda1, 0), std::min<distance_t>(lambda2, 1)};
+}
+
+    
+
+
+
+    /*Section 2: Elementary Frechet operations*/
+    template<typename localcurvetype>
+distance_t get_dist_to_point_sqr(const localcurvetype& a, point b)
+{
+    distance_t result = 0;
+//    for (point p: a) result = max(result, dist_sqr(p, b));
+    return result;
+}
+
+
+inline interval get_reachable_a(size_t i, size_t j, const curve& a, const curve& b, distance_t d)
+{
+    distance_t start, end;
+    std::tie(start, end) = intersection_interval(a[i], d, b[j], b[j + 1]);
+    return {start + j, end + j};
+}
+
+
+inline interval get_reachable_b(size_t i, size_t j, const curve& a, const curve& b, distance_t d)
+{
+    return get_reachable_a(j, i, b, a, d);
+}
+void merge (std::vector<interval>& v, interval i)
+{
+    if (is_empty_interval(i)) return;
+    if (v.size() && i.first - eps <= v.back().second) v.back().second = i.second;
+    else v.push_back(i);
+}
+
+
+
+distance_t get_last_reachable_point_from_start( curve& a,  curve& b, const distance_t d)
+{
+    size_t j = 0;
+    while (j < b.size() - 2 && dist_sqr(a.front(), b[j + 1]) <= sqr(d)) ++j;
+    distance_t result;
+    tie(std::ignore, result) = get_reachable_a(0, j, a, b, d);
+    return result;
+}
+
+// @REMARK: Curvelength has been cached in original in a class curve using a prefix_length generated for each trajectory.
+// Omitted now, for easy implementation.
+
+double curve_length(curve&a, size_t i, size_t j)
+{
+   double d = 0;
+   for (auto k = i+1; k <= j; k++)
+      d += sqrt(dist2(a[k-1],a[k])); 
+   return d;
+}
+
+
+void get_reachable_intervals(size_t i_min, size_t i_max, size_t j_min, size_t j_max, curve& a, curve& b, distance_t d, std::vector<interval>& rb, std::vector<interval>& ra, std::vector<interval>& rb_out, std::vector<interval>& ra_out)
+{
+	interval tb = empty_interval;
+    auto it = std::upper_bound(rb.begin(), rb.end(), interval{j_max, std::numeric_limits<distance_t>::lowest()});
+    if (it != rb.begin()) {
+        --it;
+        if (it->first <= j_max && it->second >= j_min) {
+            tb = *it;
+        }
+    }
+
+    interval ta = empty_interval;
+    it = std::upper_bound(ra.begin(), ra.end(), interval{i_max, std::numeric_limits<distance_t>::lowest()});
+    if (it != ra.begin()) {
+        --it;
+        if (it->first <= i_max && it->second >= i_min) {
+            ta = *it;
+        }
+    }
+
+    if (is_empty_interval(tb) && is_empty_interval(ta)) return;
+
+    if (tb.first <= j_min + eps && tb.second >= j_max - eps && ta.first <= i_min + eps && ta.second >= i_max - eps) {
+        size_t i_mid = (i_min + 1 + i_max)/2;
+		size_t j_mid = (j_min + 1 + j_max)/2;
+		if (sqrt(dist2(a[i_mid], b[j_mid])) + std::max(curve_length(a,i_min+1, i_mid),curve_length(a,i_mid, i_max)) + std::max(curve_length(b,j_min+1, j_mid),curve_length(b,j_mid, j_max)) <= d) {
+            merge(rb_out, {j_min, j_max});
+            merge(ra_out, {i_min, i_max});
+            return;
+        }
+    }
+
+    if (i_min == i_max - 1 && j_min == j_max - 1) {
+        interval aa = get_reachable_a(i_max, j_min, a, b, d);
+        interval bb = get_reachable_b(i_min, j_max, a, b, d);
+
+        if (is_empty_interval(ta)) {
+            aa.first = std::max(aa.first, tb.first);
+        }
+		else if (is_empty_interval(tb)) { bb.first = std::max(bb.first, ta.first); }
+
+        merge(rb_out, aa);
+        merge(ra_out, bb);
+
+    } else {
+        if (j_max - j_min > i_max - i_min) {
+        	std::vector<interval> ra_middle;
+        	size_t split_position = (j_max + j_min) / 2;
+        	get_reachable_intervals(i_min, i_max, j_min, split_position, a, b, d, rb, ra, rb_out, ra_middle);
+        	get_reachable_intervals(i_min, i_max, split_position, j_max, a, b, d, rb, ra_middle, rb_out, ra_out);
+        } else {
+        	std::vector<interval> rb_middle;
+        	size_t split_position = (i_max + i_min) / 2;
+        	get_reachable_intervals(i_min, split_position, j_min, j_max, a, b, d, rb, ra, rb_middle, ra_out);
+        	get_reachable_intervals(split_position, i_max, j_min, j_max, a, b, d, rb_middle, ra, rb_out, ra_out);
+		}
+    }
+}
+
+
+    
+   public:
+
+    FrechetDistance (    xgetterfunctional _getx, ygetterfunctional _gety,squareddistancefunctional _dist)
+			:getx(_getx),gety(_gety),dist2(_dist){};
+   
+bool is_frechet_distance_at_most(curve& a, curve& b, distance_t d)
+{
+    assert(a.size());
+    assert(b.size());
+    if (dist2(a.front(), b.front()) > d*d || dist2(a.back(), b.back()) > d*d) return false;
+    if (a.size() == 1 && b.size() == 1) return true;
+    else if (a.size() == 1) return get_dist_to_point_sqr(b, a[0]) <= sqr(d);
+    else if (b.size() == 1) return get_dist_to_point_sqr(a, b[0]) <= sqr(d);
+
+    std::vector<interval> ra, rb, ra_out, rb_out;
+    ra.push_back({0, get_last_reachable_point_from_start(a, b, d)});
+    rb.push_back({0, get_last_reachable_point_from_start(b, a, d)});
+
+    get_reachable_intervals(0, a.size() - 1, 0, b.size() - 1, a, b, d, ra, rb, ra_out, rb_out);
+
+    return ra_out.size() && (ra_out.back().second >= b.size() - static_cast<distance_t>(1.5));
+
+}
+
+
+
+   
+
+};
+
 
 
 

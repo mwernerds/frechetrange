@@ -23,7 +23,7 @@ using std::cout;
 using std::endl;
 namespace bg = boost::geometry;
 // Declare Geometry
- typedef bg::model::point<double, 2, bg::cs::cartesian> point_type;
+typedef bg::model::point<double, 2, bg::cs::cartesian> point_type;
 typedef bg::model::linestring<point_type> linestring_type;
 
 
@@ -57,6 +57,7 @@ int main(int argc, char **argv) {
          << (fd.isBoundedBy(t1, t2, d) ? "yes" : "no") << endl;
 
   // estimate the distance by interval cutting
+{
   std::pair<double, double> interval = {0, 5};
   while ((interval.second - interval.first) > 0.001) {
     double m = (interval.first + interval.second) / 2;
@@ -69,6 +70,46 @@ int main(int argc, char **argv) {
   }
   cout << "Final Interval: [" << interval.first << "," << interval.second << "]"
        << endl;
+}
 
+// Bringman Baldus Case
+
+frechetrange::detail::bringmanbaldus::FrechetDistance<
+      linestring_type,point_type, double,
+      std::function<double(point_type)>, // the X getter signature
+      std::function<double(point_type)>,
+      std::function<double (point_type&, point_type&)> // the squared distance signature
+      > // the Y getter signature
+      fd2(
+
+	  [](point_type p){return bg::get<0>(p);},
+	  [](point_type p){return bg::get<1>(p);},
+	  [](point_type &p1, point_type &p2) {return bg::comparable_distance(p1,p2);} // the squared distance
+	  );
+
+  cout << std::fixed;
+  // a range scan
+  for (double d = 1; d < 5; d += 0.25)
+    cout << "Reachable at " << d << ":\t"
+         << (fd2.is_frechet_distance_at_most(t1, t2, d) ? "yes" : "no") << endl;
+
+  // estimate the distance by interval cutting
+{
+  std::pair<double, double> interval = {0, 5};
+  while ((interval.second - interval.first) > 0.001) {
+    double m = (interval.first + interval.second) / 2;
+
+    if (fd2.is_frechet_distance_at_most(t1, t2, m)) {
+      interval.second = m;
+    } else {
+      interval.first = m;
+    }
+  }
+  cout << "Final Interval: [" << interval.first << "," << interval.second << "]"
+       << endl;
+
+}
+
+       
   return 0;
 }
