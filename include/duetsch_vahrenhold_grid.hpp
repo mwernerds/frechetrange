@@ -82,7 +82,7 @@ public:
     _optimized = true;
   }
 
-  std::vector<const Trajectory *> rangeQuery(const Trajectory &query,
+  std::vector<const Trajectory *> rangeQuery(Trajectory &query,
                                              double distanceThreshold) {
     std::vector<const Trajectory *> resultSet;
     auto pushBackResult = [&resultSet](const Trajectory *t) {
@@ -97,7 +97,7 @@ public:
   *               to output the result trajectories.
   */
   template <typename OutputFunctional>
-  void rangeQuery(const Trajectory &query, double distanceThreshold,
+  void rangeQuery(Trajectory &query, double distanceThreshold,
                   OutputFunctional &output) {
     if (query.size() == 0)
       return;
@@ -419,7 +419,7 @@ private:
   }
 
   template <bool left, bool bottom, typename Output>
-  void query(const Trajectory &query, double threshold, Output &output) {
+  void query(Trajectory &query, double threshold, Output &output) {
     MBR queryMBR(query, _getX, _getY);
     // check which horizontal neighbor cells need to be visited
     double cellCoordX = toCellCoord(queryMBR.template getBorder<true, left>());
@@ -501,16 +501,16 @@ private:
   }
 
   template <bool left, bool bottom, typename Output>
-  void checkCell(const CellNr &cellNr, const MBR &queryMBR, double threshold,
+  void checkCell(const CellNr &cellNr, MBR &queryMBR, double threshold,
                  Crossings crossedVerticals, Crossings crossedHorizontals,
-                 Output &output) const {
-    const Map &map = _maps[toMapIndex(left, bottom)];
+                 Output &output) {
+    Map &map = _maps[toMapIndex(left, bottom)];
     // ensure that the cell containts some trajectories
-    typename Map::const_iterator iter = map.find(cellNr);
+    typename Map::iterator iter = map.find(cellNr);
     if (iter == map.end())
       return;
 
-    const Cell &cell = iter->second;
+    Cell &cell = iter->second;
     // traverse the contained trajectories according to the sorting order
     if (cell.xSorted) {
       this->template traverseBucket<true, left, Output>(
@@ -522,13 +522,13 @@ private:
   }
 
   template <bool xDim, bool firstBorder, typename Output>
-  void traverseBucket(const typename Cell::Bucket &bucket, const MBR &queryMBR,
+  void traverseBucket(typename Cell::Bucket &bucket, MBR &queryMBR,
                       double threshold, Crossings crossedBorders,
-                      Output &output) const {
+                      Output &output) {
     if (bucket.size() < MIN_SORT_SIZE || !_optimized) {
       // check each trajectory of this cell,
       // as they are not sorted
-      for (const MBR &trajectory : bucket) {
+      for (MBR &trajectory : bucket) {
         checkTrajectory<false, false, false>(queryMBR, threshold, trajectory,
                                              output);
       }
@@ -554,8 +554,8 @@ private:
       } else {
         // traverse the trajectories forwards,
         // until the end of the active range is reached
-        auto searchBegin = bucket.cbegin();
-        auto searchEnd = bucket.cend();
+        auto searchBegin = bucket.begin();
+        auto searchEnd = bucket.end();
 
         // search for the beginning of the active range,
         // if the range query does not span the first,
@@ -599,8 +599,8 @@ private:
 
   template <bool prechecked, bool xDim, bool firstBorder,
             typename OutputFunctional>
-  void checkTrajectory(const MBR &queryMBR, double threshold,
-                       const MBR &trajMBR, OutputFunctional &output) const {
+  void checkTrajectory(MBR &queryMBR, double threshold,
+                       MBR &trajMBR, OutputFunctional &output) const {
     // ensure that all bounding box borders are within range
     if (mbrsWithinRange<prechecked, xDim, firstBorder>(queryMBR, threshold,
                                                        trajMBR)) {
