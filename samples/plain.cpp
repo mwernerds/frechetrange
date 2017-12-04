@@ -21,8 +21,11 @@ distance_functional_type squared_dist = [](point p1, point p2) {
   // provide a squared distance functional for the point type
   return (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]);
 };
-std::function<double(point p)> getx = [](point p) { return p[0]; };
-std::function<double(point p)> gety = [](point p) { return p[1]; };
+std::function<double(point p)> getx = [](point p)->double & { return p[0]; };
+std::function<double(point p)> gety = [](point p) ->double & { return p[1]; };
+
+
+
 
 int main(int argc, char **argv) {
   trajectory t1 = {{0, 0}, {0, 1}, {0, 2}};
@@ -53,5 +56,18 @@ int main(int argc, char **argv) {
   cout << "Final Interval: [" << interval.first << "," << interval.second << "]"
        << endl;
 
+
+    // now bringman baldus test code
+    frechetrange::detail::bringmanbaldus::FrechetDistance<
+	trajectory, trajectory::value_type, double,
+	 std::function<double(point p)>, std::function<double(point p)>,distance_functional_type> fd2(
+	    getx,gety,squared_dist
+	);
+  for (double d = 1; d < 5; d += 0.25)
+    cout << "Reachable2 at " << d << ":\t"
+         << (fd2.is_frechet_distance_at_most(t1,t2,d)? "yes" : "no") << endl;
+
+    
+       
   return 0;
 }
