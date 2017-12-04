@@ -459,15 +459,9 @@ private:
 
 
 /*
-The grid has been moved to an external file, as it breaks the functional api
-through some problems with const annotations.
-
-The issue is under consideration...
+class Grid
 */
-
-#ifdef USE_GRID
 #include "duetsch_vahrenhold_grid.hpp"
-#endif
 } // duetschvahrenhold
 
 
