@@ -5,7 +5,9 @@ minimalistic, dependency-free C++ / STL project.
 #include <functional>
 #include <iostream>
 
+#define USE_GRID // grid breaks some other implementations.
 #include "../include/frechetrange.hpp"
+
 
 using std::cout;
 using std::endl;
