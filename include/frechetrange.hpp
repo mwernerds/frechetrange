@@ -26,7 +26,8 @@
 *             duetschvarhenhold
 *                 class FrechetDistance
 *                 class Grid
-*             submission2
+*             bringmanbaldus
+*                 class FrechetDistance
 *             submission3
 *
 *
