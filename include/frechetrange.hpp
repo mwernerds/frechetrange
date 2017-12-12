@@ -784,6 +784,7 @@ bool is_frechet_distance_at_most(curve& a, curve& b, distance_t d)
 
 } // detail
 
+
 } // frechetrange
 
 #endif
