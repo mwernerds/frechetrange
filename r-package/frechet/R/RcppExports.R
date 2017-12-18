@@ -9,7 +9,23 @@ internal_frechet_decide_bb <- function(t1, t2, eps) {
     .Call(`_frechet_internal_frechet_decide_bb`, t1, t2, eps)
 }
 
-internal_prepareRangeQueryDataset <- function(l) {
-    .Call(`_frechet_internal_prepareRangeQueryDataset`, l)
+internal_createGridDataset <- function() {
+    .Call(`_frechet_internal_createGridDataset`)
+}
+
+internal_addTrajectory <- function(gds, m) {
+    .Call(`_frechet_internal_addTrajectory`, gds, m)
+}
+
+internal_clearDataset <- function(gds) {
+    .Call(`_frechet_internal_clearDataset`, gds)
+}
+
+internal_createIndex_dv <- function(gds) {
+    .Call(`_frechet_internal_createIndex_dv`, gds)
+}
+
+internal_gridRangeQuery <- function(gds, m, eps, materialize = TRUE) {
+    .Call(`_frechet_internal_gridRangeQuery`, gds, m, eps, materialize)
 }
 
