@@ -78,8 +78,8 @@ public:
   * @pre Neither of the trajectories is empty.
   */
   template <typename Trajectory>
-  bool isBoundedBy(Trajectory &traj1, Trajectory &traj2,
-                    double distanceBound) {
+  bool isBoundedBy(const Trajectory &traj1, const Trajectory &traj2,
+                    double distanceBound) const {
     const double boundSquared = distanceBound * distanceBound;
 
     // ensure that the corners of the free space diagram are reachable
@@ -89,8 +89,8 @@ public:
       return false;
 
     bool firstIsSmaller = traj1.size() <= traj2.size();
-    Trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
-    Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
+    const Trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
+    const Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
 
     if (smallerTraj.size() == 1) {
       return comparePointToTrajectory(smallerTraj[0], biggerTraj, boundSquared);
@@ -117,11 +117,11 @@ private:
   * processed (and accordingly the left segments of the current column).
   * A segment is reachable, if its respective beginning is <= 1.0.
   */
-  double *_leftSegmentBegins;
+  mutable double *_leftSegmentBegins;
   /**
   * Allocated size of the array _leftSegmentBegins
   */
-  size_t _capacity;
+  mutable size_t _capacity;
 
   /**
   * Decides the Fréchet distance problem for a trajectory consisting of only
@@ -130,7 +130,7 @@ private:
   template <typename Trajectory, typename point_type>
   bool comparePointToTrajectory(const point_type &p,
                                 const Trajectory &trajectory,
-                                const double boundSquared) {
+                                const double boundSquared) const {
     // the first point has already been tested
     for (size_t i = 1; i < trajectory.size(); ++i) {
       if (_squaredDistance(p, trajectory[i]) > boundSquared) {
@@ -147,9 +147,9 @@ private:
   * sequence of segment points is monotone.
   */
   template <typename Trajectory>
-  bool matchInnerPointsMonotonously( Trajectory &points,
-                                     Trajectory &segments,
-                                    double boundSquared)  {
+  bool matchInnerPointsMonotonously(const Trajectory &points,
+                                    const Trajectory &segments,
+                                    double boundSquared) const {
     // the last point has already been tested
     const size_t pointsToMatchEnd = points.size() - 1;
     const size_t numSegments = segments.size() - 1;
@@ -203,8 +203,8 @@ private:
   *      and the starting and ending points are within distance.
   */
   template <typename Trajectory>
-  bool traverseFreeSpaceDiagram( Trajectory &p1, Trajectory &p2,
-                                const double boundSquared) {
+  bool traverseFreeSpaceDiagram(const Trajectory &p1, const Trajectory &p2,
+                                const double boundSquared) const {
     // init the beginnings of reachable parts of the "frontline",
     // i.e., the right segments of the column lastly processed
     // (and accordingly the left segments of the current column)
@@ -348,7 +348,7 @@ private:
   * Increases the allocated memory of the frontline, if necessary,
   * and marks its segments as not reachable.
   */
-  void clearFrontline(size_t rows) {
+  void clearFrontline(size_t rows) const {
     // reserve memory, if necessary
     if (_capacity < rows) {
       delete[] _leftSegmentBegins;
@@ -371,10 +371,10 @@ private:
   *                 if it exists, or unchanged, otherwise.
   */
   template <typename point_type>
-  void getLineCircleIntersections(point_type &p1, point_type &p2,
-                                   point_type &cp,
-                                   double radiusSquared, double &begin,
-                                  double &end) {
+  void getLineCircleIntersections(const point_type &p1, const point_type &p2,
+                                  const point_type &cp,
+                                  const double radiusSquared, double &begin,
+                                  double &end) const {
     // TODO: Adapt to template parameter squareddistancefunctional;
     //       The following assumes the Euclidean distance.
 
@@ -429,7 +429,7 @@ private:
   */
   double getReachableBegin(double currSegmentBegin, double currSegmentEnd,
                            double prevParallelSegBegin,
-                           double prevOrthogonalSegBegin)  {
+                           double prevOrthogonalSegBegin) const {
     if (currSegmentEnd < 0.0) {
       // The segment does not intersect the free space.
       return BEGIN_NOT_REACHABLE;
