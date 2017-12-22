@@ -7,20 +7,20 @@ minimalistic, dependency-free C++ / STL project.
 
 #include "../include/frechetrange.hpp"
 
-
 using std::cout;
 using std::endl;
 
 typedef std::vector<double> point;
-typedef std::function<double(const point&, const point&)> distance_functional_type;
+typedef std::function<double(const point &, const point &)>
+    distance_functional_type;
 typedef std::vector<point> trajectory;
 
 distance_functional_type squared_dist = [](point p1, point p2) {
   // provide a squared distance functional for the point type
   return (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]);
 };
-std::function<double(const point&)> getx = [](const point& p) { return p[0]; };
-std::function<double(const point&)> gety = [](const point& p) { return p[1]; };
+std::function<double(const point &)> getx = [](const point &p) { return p[0]; };
+std::function<double(const point &)> gety = [](const point &p) { return p[1]; };
 
 int main(int argc, char **argv) {
   trajectory t1 = {{0, 0}, {0, 1}, {0, 2}};
@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
   grid.reserve(2); // not mandatory, but adviced in case of many inserts
   grid.insert(t1);
   grid.insert(t2);
-  grid.optimize(); // not mandatory, but adviced after completing all/most inserts
+  grid.optimize(); // not mandatory, but adviced after completing inserts
 
   // first version of rangeQuery: returning the result set
   auto results = grid.rangeQuery(q1, distThreshold1);
