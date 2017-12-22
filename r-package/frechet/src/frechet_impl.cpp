@@ -2,6 +2,7 @@
 #include <Rcpp.h>
 // [[Rcpp::plugins(cpp11)]]
 
+#include<array>
 #include<functional>
 #include "../../../include/frechetrange.hpp"
 using namespace Rcpp;
@@ -73,35 +74,30 @@ bool internal_frechet_decide_bb(NumericMatrix &t1, NumericMatrix &t2, double eps
 template<size_t _DIM=2>
 class GridDataset{
    public:
-        size_t DIM = _DIM;
-	typedef std::vector<double> point;
-	typedef std::function<double(point, point)> distance_functional_type;
+    const size_t DIM = _DIM;
+    typedef std::array<double, _DIM> point;
+    typedef std::function<double(const point&, const point&)> distance_functional_type;
 	typedef std::vector<point> trajectory;
 
-	distance_functional_type squared_dist = [](point p1, point p2) {
+    distance_functional_type squared_dist = [](const point& p1, const point& p2) {
   // provide a squared distance functional for the point type
   return (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]);
 };
-	std::function<double(point p)> getx = [](point p) { return p[0]; };
-	std::function<double(point p)> gety = [](point p) { return p[1]; };
+    std::function<double(const point& p)> getx = [](const point& p) { return p[0]; };
+    std::function<double(const point& p)> gety = [](const point& p) { return p[1]; };
 
 
-   
 
        std::vector<trajectory> DB;
-       size_t addTrajectory(NumericMatrix m)
-       {
-	   // @todo: track the distance thresholds min and max on insertion
-          trajectory t(m.nrow());
-	   for (size_t i=0; i < m.nrow(); i++)
-	   {
-	       t[i].resize(DIM);
-	       for (size_t d = 0; d < DIM; d++)
-	          t[i][d] = m(i,d);
-	   }
-	   DB.push_back(t);
-	   return (DB.size() -1);
-       }
+    size_t addTrajectory(const NumericMatrix& m) {
+        trajectory t(m.nrow());
+        for (size_t i=0; i < m.nrow(); i++) {
+            for (size_t d = 0; d < _DIM; d++)
+                t[i][d] = m(i,d);
+        }
+        DB.push_back(t);
+        return (DB.size() -1);
+    }
 
        size_t size(){
 	return DB.size();
@@ -111,33 +107,31 @@ class GridDataset{
 	  DB.clear();
        }
 
-/*
-*/
-    typedef 	frechetrange::detail::duetschvahrenhold::Grid<
+    typedef frechetrange::detail::duetschvahrenhold::Grid<
             trajectory,
             distance_functional_type,
             std::function<double(point p)>,
            std::function<double(point p)>> grid_type;
- grid_type *pGrid;
+    grid_type *pGrid = nullptr;
+
+    ~GridDataset() {
+        delete pGrid;
+    }
 
 	grid_type &grid()
 	{
 	   return *pGrid;
 	}
  
-	void buildIndex()
-	{
-            double meshSize = 2;
-	    pGrid = new grid_type(meshSize, squared_dist, getx, gety);
-	    auto &grid = *pGrid;
-	    grid.reserve(size()); // not mandatory, but adviced in case of many inserts
-	    for (auto &t: DB)
-		 grid.insert(t);
-	  grid.optimize(); // not mandatory, but adviced after completing all/most inserts
-
-	}
-
-       
+    void buildIndex(double meshSize) {
+        pGrid = new grid_type(meshSize, squared_dist, getx, gety);
+        grid_type &grid = *pGrid;
+        grid.reserve(size()); // not mandatory, but adviced in case of many inserts
+        for (auto &t: DB)
+            grid.insert(std::move(t));
+        clear();
+        grid.optimize(); // not mandatory, but adviced after completing all/most inserts
+    }
 };
 
 
@@ -148,15 +142,14 @@ std::vector<GridDataset<2>> gData;
 
 
 // [[Rcpp::export]]
-size_t internal_createGridDataset()
-{
-    gData.push_back(GridDataset<2>());
+size_t internal_createGridDataset() {
+    gData.emplace_back();
     return gData.size() -1;
 }
 
 
 // [[Rcpp::export]]
-size_t internal_addTrajectory (size_t gds, NumericMatrix &m)
+size_t internal_addTrajectory (size_t gds, const NumericMatrix &m)
 {
    ASSERT_VALID_DATASET(gds);
    return gData[gds].addTrajectory(m);
@@ -170,15 +163,15 @@ size_t internal_clearDataset(size_t gds)
 }
 
 // [[Rcpp::export]]
-bool internal_createIndex_dv(size_t gds)
+bool internal_createIndex_dv(size_t gds, double meshSize)
 {
    ASSERT_VALID_DATASET(gds);
    Rcout << "Creating Index from " << gData[gds].size() << " trajectories";
-   gData[gds].buildIndex();
+   gData[gds].buildIndex(meshSize);
 }
 
 template<typename traj>
-NumericMatrix _trajectory2matrix(traj &t)
+NumericMatrix _trajectory2matrix(const traj &t)
 {
     // @todo: assert non-empty t
    NumericMatrix m(t.size(), t[0].size());
@@ -189,14 +182,13 @@ NumericMatrix _trajectory2matrix(traj &t)
 }
 
 // [[Rcpp::export]]
-List internal_gridRangeQuery(size_t gds, NumericMatrix m, double eps,
+List internal_gridRangeQuery(size_t gds, const NumericMatrix& m, double eps,
                              bool materialize = true)
 {
   ASSERT_VALID_DATASET(gds);
   auto &D = gData[gds];  
   decltype(gData)::value_type::trajectory t(m.nrow());
   for (size_t i = 0; i < m.nrow(); i++) {
-    t[i].resize(D.DIM);
     for (size_t d = 0; d < D.DIM; d++)
       t[i][d] = m(i, d);
   }

@@ -21,8 +21,8 @@ internal_clearDataset <- function(gds) {
     .Call(`_frechet_internal_clearDataset`, gds)
 }
 
-internal_createIndex_dv <- function(gds) {
-    .Call(`_frechet_internal_createIndex_dv`, gds)
+internal_createIndex_dv <- function(gds, meshSize) {
+    .Call(`_frechet_internal_createIndex_dv`, gds, meshSize)
 }
 
 internal_gridRangeQuery <- function(gds, m, eps, materialize = TRUE) {
