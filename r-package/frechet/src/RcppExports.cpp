@@ -42,13 +42,13 @@ BEGIN_RCPP
 END_RCPP
 }
 // internal_addTrajectory
-size_t internal_addTrajectory(size_t gds, NumericMatrix& m);
+size_t internal_addTrajectory(size_t gds, const NumericMatrix& m);
 RcppExport SEXP _frechet_internal_addTrajectory(SEXP gdsSEXP, SEXP mSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< size_t >::type gds(gdsSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix& >::type m(mSEXP);
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type m(mSEXP);
     rcpp_result_gen = Rcpp::wrap(internal_addTrajectory(gds, m));
     return rcpp_result_gen;
 END_RCPP
@@ -65,24 +65,25 @@ BEGIN_RCPP
 END_RCPP
 }
 // internal_createIndex_dv
-bool internal_createIndex_dv(size_t gds);
-RcppExport SEXP _frechet_internal_createIndex_dv(SEXP gdsSEXP) {
+bool internal_createIndex_dv(size_t gds, double meshSize);
+RcppExport SEXP _frechet_internal_createIndex_dv(SEXP gdsSEXP, SEXP meshSizeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< size_t >::type gds(gdsSEXP);
-    rcpp_result_gen = Rcpp::wrap(internal_createIndex_dv(gds));
+    Rcpp::traits::input_parameter< double >::type meshSize(meshSizeSEXP);
+    rcpp_result_gen = Rcpp::wrap(internal_createIndex_dv(gds, meshSize));
     return rcpp_result_gen;
 END_RCPP
 }
 // internal_gridRangeQuery
-List internal_gridRangeQuery(size_t gds, NumericMatrix m, double eps, bool materialize);
+List internal_gridRangeQuery(size_t gds, const NumericMatrix& m, double eps, bool materialize);
 RcppExport SEXP _frechet_internal_gridRangeQuery(SEXP gdsSEXP, SEXP mSEXP, SEXP epsSEXP, SEXP materializeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< size_t >::type gds(gdsSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type m(mSEXP);
+    Rcpp::traits::input_parameter< const NumericMatrix& >::type m(mSEXP);
     Rcpp::traits::input_parameter< double >::type eps(epsSEXP);
     Rcpp::traits::input_parameter< bool >::type materialize(materializeSEXP);
     rcpp_result_gen = Rcpp::wrap(internal_gridRangeQuery(gds, m, eps, materialize));
@@ -96,7 +97,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_frechet_internal_createGridDataset", (DL_FUNC) &_frechet_internal_createGridDataset, 0},
     {"_frechet_internal_addTrajectory", (DL_FUNC) &_frechet_internal_addTrajectory, 2},
     {"_frechet_internal_clearDataset", (DL_FUNC) &_frechet_internal_clearDataset, 1},
-    {"_frechet_internal_createIndex_dv", (DL_FUNC) &_frechet_internal_createIndex_dv, 1},
+    {"_frechet_internal_createIndex_dv", (DL_FUNC) &_frechet_internal_createIndex_dv, 2},
     {"_frechet_internal_gridRangeQuery", (DL_FUNC) &_frechet_internal_gridRangeQuery, 4},
     {NULL, NULL, 0}
 };

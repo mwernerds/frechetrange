@@ -46,10 +46,9 @@
 #define ALLOW_FUNCTIONAL
 
 //#include<functional>
-#include<cassert>
-#include<limits>
-#include<iostream>
-
+#include <cassert>
+#include <iostream>
+#include <limits>
 
 namespace frechetrange {
 namespace detail {
@@ -79,7 +78,7 @@ public:
   */
   template <typename Trajectory>
   bool isBoundedBy(const Trajectory &traj1, const Trajectory &traj2,
-                    double distanceBound) const {
+                   double distanceBound) const {
     const double boundSquared = distanceBound * distanceBound;
 
     // ensure that the corners of the free space diagram are reachable
@@ -458,143 +457,130 @@ private:
   bool isSegmentReachable(double begin) const { return begin <= 1.0; }
 };
 
-
 /*
 class Grid
 */
 #include "duetsch_vahrenhold_grid.hpp"
 } // duetschvahrenhold
 
+namespace bringmanbaldus {
 
-namespace bringmanbaldus{
+template <typename curvetype, typename pointtype,
+          typename distancetype, // types
+          typename xgetterfunctional, typename ygetterfunctional,
+          typename squareddistancefunctional> // elementary functions
+class FrechetDistance {
 
+private:
+  static constexpr distancetype eps = 10e-5;
 
+  typedef curvetype curve;
+  typedef distancetype distance_t;
+  typedef pointtype point;
+  //    typedef typename curve::value_type point; @deprecated as we don't want
+  //    to fix the ::value_type concept for trajectories in details namespace
 
+  // an actual point proxy for having operators
+  const xgetterfunctional getx;
+  const ygetterfunctional gety;
+  squareddistancefunctional dist2;
 
+  // arithmetic was in operators, but this was to tedious for an inner class as
+  // getx and gety are not meant to be static.
+  // Therefore, transforming to some sort of assembler.
+  /*
+     DEPRECATED: As we don't know the class point and we don't want to assume
+  anything about it, we should not operate on it.
+     Instead, we have to express everything withing getx and gety and
+  distance_type arithmetics. Not beautiful, but flexible.
+     point op_sub(point &a,  point &b)
+     {
 
+        getx(a) -= getx(b);
+        gety(a) -= gety(b);
+        return a;
+     }
 
+      point op_minus( point &a,  point &b)
+      {
+      point tmp(a);
+      getx(tmp)  = getx(a)- getx(b);
+      gety(tmp) = gety(a) - gety(b);
+      return tmp;
+      }
 
-
-template<typename curvetype, typename pointtype, typename distancetype,  // types
-	typename xgetterfunctional, typename ygetterfunctional, typename squareddistancefunctional>     // elementary functions
-class FrechetDistance
-{
-
-    private:
-    static constexpr distancetype eps=10e-5;
-    
-    typedef curvetype curve;
-    typedef distancetype distance_t;
-    typedef pointtype point;
-//    typedef typename curve::value_type point; @deprecated as we don't want to fix the ::value_type concept for trajectories in details namespace
-
-    // an actual point proxy for having operators
-    const xgetterfunctional getx;
-    const ygetterfunctional gety;
-    squareddistancefunctional dist2;
-
-// arithmetic was in operators, but this was to tedious for an inner class as getx and gety are not meant to be static.
-// Therefore, transforming to some sort of assembler.
-/*
-   DEPRECATED: As we don't know the class point and we don't want to assume anything about it, we should not operate on it. 
-   Instead, we have to express everything withing getx and gety and distance_type arithmetics. Not beautiful, but flexible.
-   point op_sub(point &a,  point &b)
-   {
-
-      getx(a) -= getx(b);
-      gety(a) -= gety(b);
+     point op_add(point &a,  point &b)
+  {
+      getx(a) += getx(b);
+      gety(a) += gety(b);
       return a;
-   }
+  }
 
-    point op_minus( point &a,  point &b)
-    {
-    point tmp(a);
-    getx(tmp)  = getx(a)- getx(b);
-    gety(tmp) = gety(a) - gety(b);
-    return tmp;
-    }
+      point op_plus( point &a,  point &b)
+  {
+      auto tmp = a;
+      op_add(tmp,b);
+      return tmp;
+  }
 
-   point op_add(point &a,  point &b)
-{
-    getx(a) += getx(b);
-    gety(a) += gety(b);
-    return a;
-}
+  point op_sdiv(point &a, const distance_t d)
+  {
+      getx(a) /= d;
+      gety(a) /= d;
+      return a;
+  }
+  */
+  template <typename valtype> valtype sqr(valtype a) { return a * a; };
 
-    point op_plus( point &a,  point &b)
-{
-    auto tmp = a;
-    op_add(tmp,b);
-    return tmp;
-}
+  distance_t dist_sqr(point &a, point &b) { return (dist2(a, b)); }
 
-point op_sdiv(point &a, const distance_t d)
-{
-    getx(a) /= d;
-    gety(a) /= d;
-    return a;
-}
-*/
-  template<typename valtype>
-    valtype sqr(valtype a) {return a*a;};
+  typedef std::pair<distance_t, distance_t> interval; // .first is the
+                                                      // startpoint, .second the
+                                                      // endpoint (start
+                                                      // inclusive, end
+                                                      // exclusive)
 
+  /*Section 1: special types and their elementary operations*/
 
+  /*point type fun*/
+  typedef point vec;
 
-distance_t dist_sqr(point& a, point& b)
-{
-    return(dist2(a,b));
-}
+  static constexpr interval empty_interval{
+      std::numeric_limits<distance_t>::max(),
+      std::numeric_limits<distance_t>::lowest()};
 
+  /*
+  Actually, this would have had to be a free function. But this would pollute
+  the namespace with an interval. we should remove it when done
 
+  std::ostream& operator<<(std::ostream& out, const interval& i)
+  {
+      out << "[" << i.first << ", " << i.second << "]";
+      return out;
+  }*/
 
-    typedef std::pair<distance_t, distance_t> interval; // .first is the startpoint, .second the endpoint (start inclusive, end exclusive)
+  inline bool is_empty_interval(const interval &i) {
+    return i.first >= i.second;
+  }
 
+  /*    void pout(point & p)
+      {
+          std::cout << "POINT("<<p[0]<<";" << p[1] << ")" <<std::endl;
+          std::cout << "POINT*("<<getx(p)<<";" << gety(p) << ")" <<std::endl;
+      }*/
 
-    
-
-
-
-    /*Section 1: special types and their elementary operations*/
-
-     /*point type fun*/
-typedef point vec;
-
-
-    static constexpr interval empty_interval{std::numeric_limits<distance_t>::max(), std::numeric_limits<distance_t>::lowest()};
-
-    /*
-    Actually, this would have had to be a free function. But this would pollute the namespace with an interval. we should remove it when done
-
-    std::ostream& operator<<(std::ostream& out, const interval& i)
-    {
-	out << "[" << i.first << ", " << i.second << "]";
-	return out;
-    }*/
-
-    inline bool is_empty_interval(const interval& i)
-    {
-	return i.first >= i.second;
-    }
-
-/*    void pout(point & p)
-    {
-	std::cout << "POINT("<<p[0]<<";" << p[1] << ")" <<std::endl;
-	std::cout << "POINT*("<<getx(p)<<";" << gety(p) << ")" <<std::endl;
-    }*/
-    
-interval intersection_interval(point circle_center, distance_t radius, point line_start, point line_end)
-{
+  interval intersection_interval(point circle_center, distance_t radius,
+                                 point line_start, point line_end) {
     // move the circle center to (0, 0) to simplify the calculation
-//    line_start -= circle_center;
-    distance_t linestartx = getx(line_start)-getx(circle_center);
-    distance_t linestarty = gety(line_start)-gety(circle_center);
-    distance_t lineendx = getx(line_end)-getx(circle_center);
-    distance_t lineendy = gety(line_end)-gety(circle_center);
-   
+    //    line_start -= circle_center;
+    distance_t linestartx = getx(line_start) - getx(circle_center);
+    distance_t linestarty = gety(line_start) - gety(circle_center);
+    distance_t lineendx = getx(line_end) - getx(circle_center);
+    distance_t lineendy = gety(line_end) - gety(circle_center);
 
-//    op_sub(line_start,circle_center);
-//    line_end -= circle_center;
-//    op_sub(line_end,circle_center);
+    //    op_sub(line_start,circle_center);
+    //    line_end -= circle_center;
+    //    op_sub(line_end,circle_center);
 
     // The line can be represented as line_start + lambda * v
 
@@ -602,188 +588,202 @@ interval intersection_interval(point circle_center, distance_t radius, point lin
     //     dist(p, circle_center) = radius
     // <=> sqrt(p.x^2 + p.y^2) = radius
     // <=> p.x^2 + p.y^2 = radius^2
-    // <=> (line_start.x + lambda * v.x)^2 + (line_start.y + lambda * v.y)^2 = radius^2
-    // <=> (line_start.x^2 + 2 * line_start.x * lambda * v.x + lambda^2 * v.x^2) + (line_start.y^2 + 2 * line_start.y * lambda * v.y + lambda^2 * v.y^2) = radius^2
-    // <=> lambda^2 * (v.x^2 + v.y^2) + lambda * (2 * line_start.x * v.x + 2 * line_start.y * v.y) + line_start.x^2 + line_start.y^2) - radius^2 = 0
-    // let a := v.x^2 + v.y^2, b := 2 * line_start.x * v.x + 2 * line_start.y * v.y, c := line_start.x^2 + line_start.y^2 - radius^2
+    // <=> (line_start.x + lambda * v.x)^2 + (line_start.y + lambda * v.y)^2 =
+    // radius^2
+    // <=> (line_start.x^2 + 2 * line_start.x * lambda * v.x + lambda^2 * v.x^2)
+    // + (line_start.y^2 + 2 * line_start.y * lambda * v.y + lambda^2 * v.y^2) =
+    // radius^2
+    // <=> lambda^2 * (v.x^2 + v.y^2) + lambda * (2 * line_start.x * v.x + 2 *
+    // line_start.y * v.y) + line_start.x^2 + line_start.y^2) - radius^2 = 0
+    // let a := v.x^2 + v.y^2, b := 2 * line_start.x * v.x + 2 * line_start.y *
+    // v.y, c := line_start.x^2 + line_start.y^2 - radius^2
     // <=> lambda^2 * a + lambda * b + c) = 0
     // <=> lambda^2 + (b / a) * lambda + c / a) = 0
     // <=> lambda1/2 = - (b / 2a) +/- sqrt((b / 2a)^2 - c / a)
 
-     distance_t a = sqr((getx(line_end)-getx(line_start))) + sqr((gety(line_end)-gety(line_start)));
-     distance_t b = (linestartx * (lineendx-linestartx) + linestarty * (lineendy-linestarty));
-     distance_t c = sqr(linestartx) + sqr(linestarty) - sqr(radius);
+    distance_t a = sqr((getx(line_end) - getx(line_start))) +
+                   sqr((gety(line_end) - gety(line_start)));
+    distance_t b = (linestartx * (lineendx - linestartx) +
+                    linestarty * (lineendy - linestarty));
+    distance_t c = sqr(linestartx) + sqr(linestarty) - sqr(radius);
 
-     distance_t discriminant = sqr(b / a) - c / a;
+    distance_t discriminant = sqr(b / a) - c / a;
 
     if (discriminant < 0) {
-        return empty_interval; // no intersection;
+      return empty_interval; // no intersection;
     }
 
-     distance_t lambda1 = - b / a - sqrt(discriminant);
-     distance_t lambda2 = - b / a + sqrt(discriminant);
+    distance_t lambda1 = -b / a - sqrt(discriminant);
+    distance_t lambda2 = -b / a + sqrt(discriminant);
 
-    if (lambda2 < 0 || lambda1 > 1) return empty_interval;
-    else return {std::max<distance_t>(lambda1, 0), std::min<distance_t>(lambda2, 1)};
-}
+    if (lambda2 < 0 || lambda1 > 1)
+      return empty_interval;
+    else
+      return {std::max<distance_t>(lambda1, 0),
+              std::min<distance_t>(lambda2, 1)};
+  }
 
-    
-
-
-
-    /*Section 2: Elementary Frechet operations*/
-    template<typename localcurvetype>
-distance_t get_dist_to_point_sqr(const localcurvetype& a, point b)
-{
+  /*Section 2: Elementary Frechet operations*/
+  template <typename localcurvetype>
+  distance_t get_dist_to_point_sqr(const localcurvetype &a, point b) {
     distance_t result = 0;
-//    for (point p: a) result = max(result, dist_sqr(p, b));
+    //    for (point p: a) result = max(result, dist_sqr(p, b));
     return result;
-}
+  }
 
-
-inline interval get_reachable_a(size_t i, size_t j, const curve& a, const curve& b, distance_t d)
-{
+  inline interval get_reachable_a(size_t i, size_t j, const curve &a,
+                                  const curve &b, distance_t d) {
     distance_t start, end;
     std::tie(start, end) = intersection_interval(a[i], d, b[j], b[j + 1]);
     return {start + j, end + j};
-}
+  }
 
-
-inline interval get_reachable_b(size_t i, size_t j, const curve& a, const curve& b, distance_t d)
-{
+  inline interval get_reachable_b(size_t i, size_t j, const curve &a,
+                                  const curve &b, distance_t d) {
     return get_reachable_a(j, i, b, a, d);
-}
-void merge (std::vector<interval>& v, interval i)
-{
-    if (is_empty_interval(i)) return;
-    if (v.size() && i.first - eps <= v.back().second) v.back().second = i.second;
-    else v.push_back(i);
-}
+  }
+  void merge(std::vector<interval> &v, interval i) {
+    if (is_empty_interval(i))
+      return;
+    if (v.size() && i.first - eps <= v.back().second)
+      v.back().second = i.second;
+    else
+      v.push_back(i);
+  }
 
-
-
-distance_t get_last_reachable_point_from_start( curve& a,  curve& b, const distance_t d)
-{
+  distance_t get_last_reachable_point_from_start(curve &a, curve &b,
+                                                 const distance_t d) {
     size_t j = 0;
-    while (j < b.size() - 2 && dist_sqr(a.front(), b[j + 1]) <= sqr(d)) ++j;
+    while (j < b.size() - 2 && dist_sqr(a.front(), b[j + 1]) <= sqr(d))
+      ++j;
     distance_t result;
     tie(std::ignore, result) = get_reachable_a(0, j, a, b, d);
     return result;
-}
+  }
 
-// @REMARK: Curvelength has been cached in original in a class curve using a prefix_length generated for each trajectory.
-// Omitted now, for easy implementation.
+  // @REMARK: Curvelength has been cached in original in a class curve using a
+  // prefix_length generated for each trajectory.
+  // Omitted now, for easy implementation.
 
-double curve_length(curve&a, size_t i, size_t j)
-{
-   double d = 0;
-   for (auto k = i+1; k <= j; k++)
-      d += sqrt(dist2(a[k-1],a[k])); 
-   return d;
-}
+  double curve_length(curve &a, size_t i, size_t j) {
+    double d = 0;
+    for (auto k = i + 1; k <= j; k++)
+      d += sqrt(dist2(a[k - 1], a[k]));
+    return d;
+  }
 
-
-void get_reachable_intervals(size_t i_min, size_t i_max, size_t j_min, size_t j_max, curve& a, curve& b, distance_t d, std::vector<interval>& rb, std::vector<interval>& ra, std::vector<interval>& rb_out, std::vector<interval>& ra_out)
-{
-	interval tb = empty_interval;
-    auto it = std::upper_bound(rb.begin(), rb.end(), interval{j_max, std::numeric_limits<distance_t>::lowest()});
+  void get_reachable_intervals(size_t i_min, size_t i_max, size_t j_min,
+                               size_t j_max, curve &a, curve &b, distance_t d,
+                               std::vector<interval> &rb,
+                               std::vector<interval> &ra,
+                               std::vector<interval> &rb_out,
+                               std::vector<interval> &ra_out) {
+    interval tb = empty_interval;
+    auto it = std::upper_bound(
+        rb.begin(), rb.end(),
+        interval{j_max, std::numeric_limits<distance_t>::lowest()});
     if (it != rb.begin()) {
-        --it;
-        if (it->first <= j_max && it->second >= j_min) {
-            tb = *it;
-        }
+      --it;
+      if (it->first <= j_max && it->second >= j_min) {
+        tb = *it;
+      }
     }
 
     interval ta = empty_interval;
-    it = std::upper_bound(ra.begin(), ra.end(), interval{i_max, std::numeric_limits<distance_t>::lowest()});
+    it = std::upper_bound(
+        ra.begin(), ra.end(),
+        interval{i_max, std::numeric_limits<distance_t>::lowest()});
     if (it != ra.begin()) {
-        --it;
-        if (it->first <= i_max && it->second >= i_min) {
-            ta = *it;
-        }
+      --it;
+      if (it->first <= i_max && it->second >= i_min) {
+        ta = *it;
+      }
     }
 
-    if (is_empty_interval(tb) && is_empty_interval(ta)) return;
+    if (is_empty_interval(tb) && is_empty_interval(ta))
+      return;
 
-    if (tb.first <= j_min + eps && tb.second >= j_max - eps && ta.first <= i_min + eps && ta.second >= i_max - eps) {
-        size_t i_mid = (i_min + 1 + i_max)/2;
-		size_t j_mid = (j_min + 1 + j_max)/2;
-		if (sqrt(dist2(a[i_mid], b[j_mid])) + std::max(curve_length(a,i_min+1, i_mid),curve_length(a,i_mid, i_max)) + std::max(curve_length(b,j_min+1, j_mid),curve_length(b,j_mid, j_max)) <= d) {
-            merge(rb_out, {j_min, j_max});
-            merge(ra_out, {i_min, i_max});
-            return;
-        }
+    if (tb.first <= j_min + eps && tb.second >= j_max - eps &&
+        ta.first <= i_min + eps && ta.second >= i_max - eps) {
+      size_t i_mid = (i_min + 1 + i_max) / 2;
+      size_t j_mid = (j_min + 1 + j_max) / 2;
+      if (sqrt(dist2(a[i_mid], b[j_mid])) +
+              std::max(curve_length(a, i_min + 1, i_mid),
+                       curve_length(a, i_mid, i_max)) +
+              std::max(curve_length(b, j_min + 1, j_mid),
+                       curve_length(b, j_mid, j_max)) <=
+          d) {
+        merge(rb_out, {j_min, j_max});
+        merge(ra_out, {i_min, i_max});
+        return;
+      }
     }
 
     if (i_min == i_max - 1 && j_min == j_max - 1) {
-        interval aa = get_reachable_a(i_max, j_min, a, b, d);
-        interval bb = get_reachable_b(i_min, j_max, a, b, d);
+      interval aa = get_reachable_a(i_max, j_min, a, b, d);
+      interval bb = get_reachable_b(i_min, j_max, a, b, d);
 
-        if (is_empty_interval(ta)) {
-            aa.first = std::max(aa.first, tb.first);
-        }
-		else if (is_empty_interval(tb)) { bb.first = std::max(bb.first, ta.first); }
+      if (is_empty_interval(ta)) {
+        aa.first = std::max(aa.first, tb.first);
+      } else if (is_empty_interval(tb)) {
+        bb.first = std::max(bb.first, ta.first);
+      }
 
-        merge(rb_out, aa);
-        merge(ra_out, bb);
+      merge(rb_out, aa);
+      merge(ra_out, bb);
 
     } else {
-        if (j_max - j_min > i_max - i_min) {
-        	std::vector<interval> ra_middle;
-        	size_t split_position = (j_max + j_min) / 2;
-        	get_reachable_intervals(i_min, i_max, j_min, split_position, a, b, d, rb, ra, rb_out, ra_middle);
-        	get_reachable_intervals(i_min, i_max, split_position, j_max, a, b, d, rb, ra_middle, rb_out, ra_out);
-        } else {
-        	std::vector<interval> rb_middle;
-        	size_t split_position = (i_max + i_min) / 2;
-        	get_reachable_intervals(i_min, split_position, j_min, j_max, a, b, d, rb, ra, rb_middle, ra_out);
-        	get_reachable_intervals(split_position, i_max, j_min, j_max, a, b, d, rb_middle, ra, rb_out, ra_out);
-		}
+      if (j_max - j_min > i_max - i_min) {
+        std::vector<interval> ra_middle;
+        size_t split_position = (j_max + j_min) / 2;
+        get_reachable_intervals(i_min, i_max, j_min, split_position, a, b, d,
+                                rb, ra, rb_out, ra_middle);
+        get_reachable_intervals(i_min, i_max, split_position, j_max, a, b, d,
+                                rb, ra_middle, rb_out, ra_out);
+      } else {
+        std::vector<interval> rb_middle;
+        size_t split_position = (i_max + i_min) / 2;
+        get_reachable_intervals(i_min, split_position, j_min, j_max, a, b, d,
+                                rb, ra, rb_middle, ra_out);
+        get_reachable_intervals(split_position, i_max, j_min, j_max, a, b, d,
+                                rb_middle, ra, rb_out, ra_out);
+      }
     }
-}
+  }
 
+public:
+  FrechetDistance(xgetterfunctional _getx, ygetterfunctional _gety,
+                  squareddistancefunctional _dist)
+      : getx(_getx), gety(_gety), dist2(_dist){};
 
-    
-   public:
-
-    FrechetDistance (    xgetterfunctional _getx, ygetterfunctional _gety,squareddistancefunctional _dist)
-			:getx(_getx),gety(_gety),dist2(_dist){};
-   
-bool is_frechet_distance_at_most(curve& a, curve& b, distance_t d)
-{
+  bool is_frechet_distance_at_most(curve &a, curve &b, distance_t d) {
     assert(a.size());
     assert(b.size());
-    if (dist2(a.front(), b.front()) > d*d || dist2(a.back(), b.back()) > d*d) return false;
-    if (a.size() == 1 && b.size() == 1) return true;
-    else if (a.size() == 1) return get_dist_to_point_sqr(b, a[0]) <= sqr(d);
-    else if (b.size() == 1) return get_dist_to_point_sqr(a, b[0]) <= sqr(d);
+    if (dist2(a.front(), b.front()) > d * d ||
+        dist2(a.back(), b.back()) > d * d)
+      return false;
+    if (a.size() == 1 && b.size() == 1)
+      return true;
+    else if (a.size() == 1)
+      return get_dist_to_point_sqr(b, a[0]) <= sqr(d);
+    else if (b.size() == 1)
+      return get_dist_to_point_sqr(a, b[0]) <= sqr(d);
 
     std::vector<interval> ra, rb, ra_out, rb_out;
     ra.push_back({0, get_last_reachable_point_from_start(a, b, d)});
     rb.push_back({0, get_last_reachable_point_from_start(b, a, d)});
 
-    get_reachable_intervals(0, a.size() - 1, 0, b.size() - 1, a, b, d, ra, rb, ra_out, rb_out);
+    get_reachable_intervals(0, a.size() - 1, 0, b.size() - 1, a, b, d, ra, rb,
+                            ra_out, rb_out);
 
-    return ra_out.size() && (ra_out.back().second >= b.size() - static_cast<distance_t>(1.5));
-
-}
-
-
-
-   
-
+    return ra_out.size() &&
+           (ra_out.back().second >= b.size() - static_cast<distance_t>(1.5));
+  }
 };
-
-
-
-
-
 
 } // bringmanbaldus
 
-
 } // detail
-
 
 } // frechetrange
 

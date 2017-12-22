@@ -40,7 +40,8 @@ ds = internal_createGridDataset();
 ### Feed the data into C++
 tmp = lapply(datalist, function(x) internal_addTrajectory(ds,as.matrix(x)));
 ### Now, build the index.
-internal_createIndex_dv(ds);
+meshSize = 1.0;
+internal_createIndex_dv(ds, meshSize);
 
 ### Now, query
 result = internal_gridRangeQuery(ds,as.matrix(datalist[[queryIndex]]),.02);
