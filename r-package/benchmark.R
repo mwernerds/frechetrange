@@ -7,11 +7,22 @@ library("frechet");
 library("ggplot2")
 library("microbenchmark")
 
+library(sp);
+### Some basic test data
 
-data(
+input = list(t1 = matrix(c(1,0,2,0,4,0,5,0), ncol=2),
+             t2 = matrix(c(1,0,3,3,5,0), ncol=2))
 
+formats = list (
+    t.matrix = input,
+    t.data.frame = list(t1 = data.frame(x = input[["t1"]],y = input[["t1"]]),
+                       t2 = data.frame(x = input[["t2"]],y = input[["t2"]]))
+    )
 
+formats[["spdf"]]  = lapply(formats[["t.data.frame"]], function(x) SpatialPointsDataFrame(x, data.frame(ID=1:nrow(x))));
 
+M1 = formats[["t.matrix"]][[1]];
+M2 = formats[["t.matrix"]][[2]];
 
 
 
