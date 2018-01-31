@@ -72,9 +72,9 @@ int main(int argc, char **argv) {
          << "]" << endl;
   }
 
-  // Bringman Baldus Case
+  // Bringmann Baldus Case
 
-  frechetrange::detail::bringmanbaldus::FrechetDistance<
+  frechetrange::detail::bringmannbaldus::FrechetDistance<
       std::function<double(
           const point_type &,
           const point_type &)>, // the squared distance signature

@@ -58,8 +58,8 @@ int main(int argc, char **argv) {
          << "]" << endl;
   }
 
-  // now bringman baldus test code, deactivated as it is not ready.
-  frechetrange::detail::bringmanbaldus::FrechetDistance<
+  // now bringmann baldus test code, deactivated as it is not ready.
+  frechetrange::detail::bringmannbaldus::FrechetDistance<
       distance_functional_type, decltype(getx), decltype(gety)>
       fd2(squared_dist, getx, gety);
 

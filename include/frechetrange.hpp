@@ -26,7 +26,7 @@
 *             duetschvarhenhold
 *                 class FrechetDistance
 *                 class Grid
-*             bringmanbaldus
+*             bringmannbaldus
 *                 class FrechetDistance
 *                 class spatial_index
 *
@@ -461,7 +461,7 @@ private:
 #include <cassert>
 #include <limits>
 
-namespace bringmanbaldus {
+namespace bringmannbaldus {
 
 typedef double distance_t;
 
