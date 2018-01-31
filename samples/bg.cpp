@@ -75,20 +75,17 @@ int main(int argc, char **argv) {
   // Bringman Baldus Case
 
   frechetrange::detail::bringmanbaldus::FrechetDistance<
-      linestring_type, point_type, double,
+      std::function<double(
+          const point_type &,
+          const point_type &)>, // the squared distance signature
       std::function<double(const point_type &)>, // the X getter signature
-      std::function<double(const point_type &)>,
-      std::function<double(point_type &,
-                           point_type &)> // the squared distance signature
-      >                                   // the Y getter signature
+      std::function<double(const point_type &)>> // the Y getter signature
       fd2(
-
-          [](const point_type &p) { return bg::get<0>(p); },
-          [](const point_type &p) { return bg::get<1>(p); },
-          [](point_type &p1, point_type &p2) {
+          [](const point_type &p1, const point_type &p2) {
             return bg::comparable_distance(p1, p2);
-          } // the squared distance
-          );
+          }, // the squared distance
+          [](const point_type &p) { return bg::get<0>(p); },
+          [](const point_type &p) { return bg::get<1>(p); });
 
   cout << std::fixed;
   // a range scan

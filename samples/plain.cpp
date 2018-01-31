@@ -60,9 +60,8 @@ int main(int argc, char **argv) {
 
   // now bringman baldus test code, deactivated as it is not ready.
   frechetrange::detail::bringmanbaldus::FrechetDistance<
-      trajectory, trajectory::value_type, double, decltype(getx),
-      decltype(gety), distance_functional_type>
-      fd2(getx, gety, squared_dist);
+      distance_functional_type, decltype(getx), decltype(gety)>
+      fd2(squared_dist, getx, gety);
 
   for (double d = 1; d < 15; d += 0.25)
     cout << "Reachable2 at " << d << ":\t"
