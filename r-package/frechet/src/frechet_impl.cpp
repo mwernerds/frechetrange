@@ -43,10 +43,15 @@ frechetrange::detail::duetschvahrenhold::FrechetDistance<
     decltype(dist_sqr), decltype(getx), decltype(gety)>
     fd(dist_sqr, getx, gety);
 
-frechetrange::detail::bringmanbaldus::FrechetDistance<
+frechetrange::detail::baldusbringmann::FrechetDistance<
+      decltype(dist_sqr), decltype(getx), decltype(gety)>
+      fd2(dist_sqr, getx, gety);
+
+    
+/*frechetrange::detail::baldusbringmann::FrechetDistance<
     ContainerAdapter, ContainerAdapter::value_type, double, decltype(getx),
     decltype(gety), decltype(dist_sqr)>
-    fd2(getx, gety, dist_sqr);
+    fd2(getx, gety, dist_sqr);*/
 
 // [[Rcpp::export]]
 bool internal_frechet_decide_dv(NumericMatrix &t1, NumericMatrix &t2,
