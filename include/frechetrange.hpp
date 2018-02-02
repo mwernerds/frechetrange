@@ -62,9 +62,7 @@ public:
   FrechetDistance(squareddistancefunctional dist2, xgetterfunctional xGetter,
                   ygetterfunctional yGetter)
       : _dist2(dist2), _getX(xGetter), _getY(yGetter),
-        _leftSegmentBegins(nullptr), _capacity(0)
-
-  {}
+        _leftSegmentBegins(nullptr), _capacity(0) {}
   ~FrechetDistance() { delete[] _leftSegmentBegins; }
 
   /**
@@ -501,9 +499,9 @@ template <typename squareddistancefunctional, typename xgetterfunctional,
 class FrechetDistance {
   static constexpr distance_t eps = 10e-10;
 
+  squareddistancefunctional _dist2;
   xgetterfunctional _getX;
   ygetterfunctional _getY;
-  squareddistancefunctional _dist2;
 
   /*Section 1: special types and their elementary operations*/
   typedef std::pair<distance_t, distance_t> interval; // .first is the
@@ -700,7 +698,7 @@ class FrechetDistance {
 public:
   FrechetDistance(squareddistancefunctional dist2, xgetterfunctional getX,
                   ygetterfunctional getY)
-      : _getX(getX), _getY(getY), _dist2(dist2){};
+      : _dist2(dist2), _getX(getX), _getY(getY){};
 
   template <typename Trajectory>
   bool is_frechet_distance_at_most(const Trajectory &a, const Trajectory &b,

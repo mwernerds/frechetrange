@@ -36,20 +36,17 @@ datalist = tsplit(sanfrancisco);
 queryIndex = 5;
 
 ### Create a handle for holding the data
-ds = internal_createGrid();
+ds = internal_createTreeIndex();
 ### Feed the data into C++
-tmp = lapply(datalist, function(x) internal_addTrajectoryToGrid(ds,as.matrix(x)));
-### Now, build the index.
-meshSize = 1.0;
-internal_buildIndex(ds, meshSize);
+tmp = lapply(datalist, function(x) internal_addTrajectoryToTree(ds,as.matrix(x)));
 
 ### Now, query
-result = internal_gridRangeQuery(ds,as.matrix(datalist[[queryIndex]]),.02);
+result = internal_treeRangeQuery(ds,as.matrix(datalist[[queryIndex]]),.02);
 print(sprintf("Range query found %d",length(result)));
 
 
 ### And visualize (query is red and thick, dataset is gray, found is black and small)
-png("grid.png")
+png("tree.png")
 plot(sanfrancisco,t="l", col="gray");
 lines(datalist[[queryIndex]],col="red", lwd=5)
 lapply(result, function(x) lines(x,col="black"))

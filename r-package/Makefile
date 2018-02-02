@@ -1,3 +1,3 @@
 all:
-	echo "library(Rcpp); compileAttributes(\"./frechet\")" | R --no-save -q
+	echo "library(Rcpp); compileAttributes(\"./frechet\")" | sudo R --no-save -q
 	R CMD INSTALL frechet

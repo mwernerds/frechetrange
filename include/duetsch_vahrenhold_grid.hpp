@@ -1,7 +1,6 @@
 #ifndef DUETSCH_VAHRENHOLD_GRID_INC
 #define DUETSCH_VAHRENHOLD_GRID_INC
 
-
 /**
 * A grid of fixed mesh size spanning the Euclidean plane.
 * It stores dataset trajectories in its cells to
@@ -15,12 +14,11 @@ public:
   /**
   * Creates a grid of the specified mesh size.
   */
-  Grid(double meshSize, squareddistancefunctional squaredDistance,
+  Grid(double meshSize, squareddistancefunctional dist2,
        xgetterfunctional xGetter, ygetterfunctional yGetter)
       : _meshSize(meshSize), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
         _useLeftBorder(), _useBottomBorder(), _optimized(false),
-        _decider(squaredDistance, xGetter, yGetter), _getX(xGetter),
-        _getY(yGetter) {}
+        _decider(dist2, xGetter, yGetter), _getX(xGetter), _getY(yGetter) {}
   Grid(const Grid &) = default;
   Grid(Grid &&) = default;
   Grid &operator=(const Grid &) = default;
@@ -328,7 +326,6 @@ private:
   mutable FrechetDistance<squareddistancefunctional, xgetterfunctional,
                           ygetterfunctional>
       _decider;
-  squareddistancefunctional _squaredDistance;
   xgetterfunctional _getX;
   ygetterfunctional _getY;
 

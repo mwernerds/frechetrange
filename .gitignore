@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+# Plots, etc.
+/r-package/Rplots.pdf
+/r-package/tree.png

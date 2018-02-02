@@ -151,6 +151,8 @@ public:
         _curves(), _decider(dist2, xGetter, yGetter), _dist2(dist2),
         _getX(xGetter), _getY(yGetter) {}
 
+  size_t size() const { return _curves.size(); }
+
   void add_curve(const Trajectory &t) {
     _q.add(_curves.size(), get_position(t));
     _curves.emplace_back(t, _dist2);
