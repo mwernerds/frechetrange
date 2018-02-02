@@ -36,12 +36,12 @@ datalist = tsplit(sanfrancisco);
 queryIndex = 5;
 
 ### Create a handle for holding the data
-ds = internal_createGridDataset();
+ds = internal_createGrid();
 ### Feed the data into C++
-tmp = lapply(datalist, function(x) internal_addTrajectory(ds,as.matrix(x)));
+tmp = lapply(datalist, function(x) internal_addTrajectoryToGrid(ds,as.matrix(x)));
 ### Now, build the index.
 meshSize = 1.0;
-internal_createIndex_dv(ds, meshSize);
+internal_buildIndex(ds, meshSize);
 
 ### Now, query
 result = internal_gridRangeQuery(ds,as.matrix(datalist[[queryIndex]]),.02);
