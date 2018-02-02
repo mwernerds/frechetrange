@@ -26,7 +26,7 @@
 *             duetschvarhenhold
 *                 class FrechetDistance
 *                 class Grid
-*             bringmannbaldus
+*             baldusbringmann
 *                 class FrechetDistance
 *                 class spatial_index
 *
@@ -461,7 +461,7 @@ private:
 #include <cassert>
 #include <limits>
 
-namespace bringmannbaldus {
+namespace baldusbringmann {
 
 typedef double distance_t;
 
@@ -472,30 +472,26 @@ template <typename valtype> valtype sqr(valtype a) { return a * a; };
  * we also store the length of any prefix of the trajectory.
  */
 template <typename Trajectory> class curve {
-  const Trajectory *_trajectory;
+  const Trajectory _trajectory;
   std::vector<distance_t> _prefix_length;
 
 public:
   template <typename squareddistancefunctional>
-  inline curve(const Trajectory &t, squareddistancefunctional &dist2)
-      : _trajectory(&t), _prefix_length(t.size()) {
+  curve(const Trajectory &t, squareddistancefunctional &dist2)
+      : _trajectory(t), _prefix_length(t.size()) {
     _prefix_length[0] = 0;
-    for (size_t i = 1; i < _trajectory->size(); ++i)
+    for (size_t i = 1; i < t.size(); ++i)
       _prefix_length[i] =
           _prefix_length[i - 1] + std::sqrt(dist2(t[i - 1], t[i]));
   }
 
   curve() = default;
-  curve(const curve &) = default;
-  curve(curve &&) = default;
-  curve &operator=(const curve &) = default;
-  curve &operator=(curve &&) = default;
 
-  inline size_t size() const { return _trajectory->size(); }
+  size_t size() const { return _trajectory.size(); }
 
-  inline const Trajectory &trajectory() const { return *_trajectory; }
+  const Trajectory &trajectory() const { return _trajectory; }
 
-  inline distance_t curve_length(size_t i, size_t j) const {
+  distance_t curve_length(size_t i, size_t j) const {
     return _prefix_length[j] - _prefix_length[i];
   }
 };
@@ -519,7 +515,7 @@ class FrechetDistance {
   const interval empty_interval{std::numeric_limits<distance_t>::max(),
                                 std::numeric_limits<distance_t>::lowest()};
 
-  inline bool is_empty_interval(const interval &i) const {
+  bool is_empty_interval(const interval &i) const {
     return i.first >= i.second;
   }
 
@@ -583,16 +579,16 @@ class FrechetDistance {
   }
 
   template <typename Trajectory>
-  inline interval get_reachable_a(size_t i, size_t j, const Trajectory &a,
-                                  const Trajectory &b, distance_t d) const {
+  interval get_reachable_a(size_t i, size_t j, const Trajectory &a,
+                           const Trajectory &b, distance_t d) const {
     distance_t start, end;
     std::tie(start, end) = intersection_interval(a[i], d, b[j], b[j + 1]);
     return {start + j, end + j};
   }
 
   template <typename Trajectory>
-  inline interval get_reachable_b(size_t i, size_t j, const Trajectory &a,
-                                  const Trajectory &b, distance_t d) const {
+  interval get_reachable_b(size_t i, size_t j, const Trajectory &a,
+                           const Trajectory &b, distance_t d) const {
     return get_reachable_a(j, i, b, a, d);
   }
 

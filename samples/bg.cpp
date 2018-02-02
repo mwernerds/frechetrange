@@ -6,7 +6,6 @@ two versions are given:
   one is vector_of_points, which models a trajectory as a vector of boost points
   one is linestring, which models a trajectory as a linestring feature.
 
-
 */
 #include <cmath>
 #include <functional>
@@ -74,7 +73,7 @@ int main(int argc, char **argv) {
 
   // Bringmann Baldus Case
 
-  frechetrange::detail::bringmannbaldus::FrechetDistance<
+  frechetrange::detail::baldusbringmann::FrechetDistance<
       std::function<double(
           const point_type &,
           const point_type &)>, // the squared distance signature

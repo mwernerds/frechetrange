@@ -12,7 +12,7 @@ distance_t nd_point_dist(const nd_point<dimensions> &a,
                          const nd_point<dimensions> &b);
 
 template <>
-inline distance_t nd_point_dist(const nd_point<8> &a, const nd_point<8> &b) {
+distance_t nd_point_dist(const nd_point<8> &a, const nd_point<8> &b) {
   distance_t result = 0;
   for (size_t i = 0; i < 4; i += 2) {
     result = std::max(result,
@@ -151,43 +151,52 @@ public:
         _curves(), _decider(dist2, xGetter, yGetter), _dist2(dist2),
         _getX(xGetter), _getY(yGetter) {}
 
-  void add_curve(int id, const Trajectory &t) {
-    _q.add(id, get_position(t));
-    assert(!_curves.count(id));
-    _curves[id] = curve<Trajectory>(t, _dist2);
+  void add_curve(const Trajectory &t) {
+    _q.add(_curves.size(), get_position(t));
+    _curves.emplace_back(t, _dist2);
   }
 
   // Returns the ids of all trajectories that may have frechet distance d or
   // less.
   // The result may however contain some whose frechet distance to c is too
   // large.
-  std::vector<int> get_close_curves(const Trajectory &t, distance_t d) const {
-    curve<Trajectory> c(t, _dist2);
-    std::vector<int> potential_curves = _q.get(get_position(t), d);
-    std::vector<int> result;
+  std::vector<const Trajectory *> get_close_curves(const Trajectory &t,
+                                                   distance_t d) const {
+    std::vector<const Trajectory *> resultSet;
+    auto pushBackResult = [&resultSet](const Trajectory *t) {
+      resultSet.push_back(t);
+    };
+    get_close_curves(t, d, pushBackResult);
+    return resultSet;
+  }
 
-    for (int id : potential_curves) {
-      const curve<Trajectory> &c2 = _curves.at(id);
+  template <typename OutputFunctional>
+  void get_close_curves(const Trajectory &t, distance_t d,
+                        OutputFunctional &output) const {
+    // TODO: don't copy t
+    curve<Trajectory> c(t, _dist2);
+    std::vector<size_t> potential_curves = _q.get(get_position(t), d);
+
+    for (size_t i : potential_curves) {
+      const curve<Trajectory> &c2 = _curves[i];
 
       if (get_frechet_distance_upper_bound(t, c2.trajectory()) <= sqr(d)) {
-        result.push_back(id);
+        output(&(c2.trajectory()));
       } else if (negfilter(c, c2, d)) {
         continue;
       } else if (_decider.is_frechet_distance_at_most(c, c2, d)) {
-        result.push_back(id);
+        output(&(c2.trajectory()));
       }
     }
-    // TODO: return trajectories
-    return result;
   }
 
 private:
   static constexpr distance_t min_x = -1e18l, min_y = -1e18l, max_x = 1e18l,
                               max_y = 1e18l;
 
-  quadtree<8, int>
+  quadtree<8, size_t>
       _q; // first x, first y, last x, last y, min x, min y, max x, max y
-  std::unordered_map<int, curve<Trajectory>> _curves;
+  std::vector<curve<Trajectory>> _curves;
 
   FrechetDistance<squareddistancefunctional, xgetterfunctional,
                   ygetterfunctional>

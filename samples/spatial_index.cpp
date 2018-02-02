@@ -2,6 +2,7 @@
 This sample illustrates how to use the spatial_index data structure from a
 minimalistic, dependency-free C++ / STL project.
 */
+#include <functional>
 #include <iostream>
 
 #include "../include/frechetrange.hpp"
@@ -29,28 +30,34 @@ int main(int argc, char **argv) {
   trajectory q2 = {{1, 1}, {2, 2}, {1, 3}};
   const double distThreshold2 = 2.0;
 
-  frechetrange::detail::bringmannbaldus::spatial_index<
+  frechetrange::detail::baldusbringmann::spatial_index<
       trajectory, distance_functional_type, decltype(getx), decltype(gety)>
       spatial_index(squared_dist, getx, gety);
 
-  spatial_index.add_curve(1, t1);
-  spatial_index.add_curve(2, t2);
+  spatial_index.add_curve(t1);
+  spatial_index.add_curve(t2);
 
-  std::vector<int> results1 =
-      spatial_index.get_close_curves(q1, distThreshold1);
+  // first version of get_close_curves: returning the result set
+  auto results = spatial_index.get_close_curves(q1, distThreshold1);
+
   cout << "Data trajectories within Frechet distance " << distThreshold1
        << " of q1:" << endl;
-  for (int i : results1) {
-    cout << "t" << i << endl;
+  for (const trajectory *t : results) {
+    for (const point &p : *t)
+      cout << "( " << p[0] << ", " << p[1] << " ); ";
+    cout << endl;
   }
 
-  std::vector<int> results2 =
-      spatial_index.get_close_curves(q2, distThreshold2);
+  // second version of get_close_curves: using an output functional
+  cout << endl;
   cout << "Data trajectories within Frechet distance " << distThreshold2
        << " of q2:" << endl;
-  for (int i : results2) {
-    cout << "t" << i << endl;
-  }
+  auto output = [](const trajectory *t) {
+    for (const point &p : *t)
+      cout << "( " << p[0] << ", " << p[1] << " ); ";
+    cout << endl;
+  };
+  spatial_index.get_close_curves(q2, distThreshold2, output);
 
   return 0;
 }

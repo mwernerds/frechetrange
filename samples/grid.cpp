@@ -35,10 +35,10 @@ int main(int argc, char **argv) {
       trajectory, distance_functional_type, decltype(getx), decltype(gety)>
       grid(meshSize, squared_dist, getx, gety);
 
-  grid.reserve(2); // not mandatory, but adviced in case of many inserts
+  grid.reserve(2); // not mandatory, but advised in case of many inserts
   grid.insert(t1);
   grid.insert(t2);
-  grid.optimize(); // not mandatory, but adviced after completing inserts
+  grid.optimize(); // not mandatory, but advised after completing inserts
 
   // first version of rangeQuery: returning the result set
   auto results = grid.rangeQuery(q1, distThreshold1);
