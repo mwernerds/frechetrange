@@ -1,5 +1,5 @@
 /*
-This sample illustrates how to use the grid data structure from a
+This sample illustrates how to use the spatial_index data structure from a
 minimalistic, dependency-free C++ / STL project.
 */
 #include <functional>
@@ -30,18 +30,15 @@ int main(int argc, char **argv) {
   trajectory q2 = {{1, 1}, {2, 2}, {1, 3}};
   const double distThreshold2 = 2.0;
 
-  double meshSize = std::max(distThreshold1, distThreshold2);
-  frechetrange::detail::duetschvahrenhold::Grid<
+  frechetrange::detail::baldusbringmann::spatial_index<
       trajectory, distance_functional_type, decltype(getx), decltype(gety)>
-      grid(meshSize, squared_dist, getx, gety);
+      spatial_index(squared_dist, getx, gety);
 
-  grid.reserve(2); // not mandatory, but advised in case of many inserts
-  grid.insert(t1);
-  grid.insert(t2);
-  grid.optimize(); // not mandatory, but advised after completing inserts
+  spatial_index.add_curve(t1);
+  spatial_index.add_curve(t2);
 
-  // first version of rangeQuery: returning the result set
-  auto results = grid.rangeQuery(q1, distThreshold1);
+  // first version of get_close_curves: returning the result set
+  auto results = spatial_index.get_close_curves(q1, distThreshold1);
 
   cout << "Data trajectories within Frechet distance " << distThreshold1
        << " of q1:" << endl;
@@ -51,7 +48,7 @@ int main(int argc, char **argv) {
     cout << endl;
   }
 
-  // second version of rangeQuery: using an output functional
+  // second version of get_close_curves: using an output functional
   cout << endl;
   cout << "Data trajectories within Frechet distance " << distThreshold2
        << " of q2:" << endl;
@@ -60,7 +57,7 @@ int main(int argc, char **argv) {
       cout << "( " << p[0] << ", " << p[1] << " ); ";
     cout << endl;
   };
-  grid.rangeQuery(q2, distThreshold2, output);
+  spatial_index.get_close_curves(q2, distThreshold2, output);
 
   return 0;
 }
