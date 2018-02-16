@@ -845,7 +845,7 @@ public:
 							std::vector<Portal> &ports = portals[row];
 							choice.source = -1;
 							for (Portal &p : ports) {
-								int jumpSize = p.destination - p.source;
+								//int jumpSize = p.destination - p.source;
 								// check if jump within range
 								if (p.destination <= queue[first][qIndex].end_row_index) {
 									// check if jump distance fits
@@ -1002,7 +1002,7 @@ public:
 #endif
 
 
-		double x, y, z, w;
+		//double x, y, z, w;
 		vertexBuffer.clear();
 		distanceBuffer.clear();
 		totalBuffer.clear();
@@ -1118,7 +1118,7 @@ public:
 
 
 	// Parses query file, does not load query trajectories
-	std::vector<Query>* parseQueryFile(char* filename) {
+	std::vector<Query>* parseQueryFile(std::string filename) {
 		std::ifstream infile(filename);
 
 		if (!infile.is_open()) {
@@ -1160,7 +1160,7 @@ public:
 		std::string trajectoryFileName;
 		std::vector<std::string> * trajectoryNames = new std::vector<std::string>();
 
-		int trajectoryNumber = 0;
+		//int trajectoryNumber = 0;
 		while (infile >> trajectoryFileName) {
 			trajectoryNames->push_back(trajectoryFileName);
 		}
@@ -1526,13 +1526,13 @@ void makeSimplificationsForTrajectory(Trajectory &t, double diagonal, AlgorithmO
 	}
 	targetCounts[0] = std::min(18, targetCounts[0]);//start simple in case dihash is useless
 
-	double diag = t.boundingBox->getDiagonal();
+	//double diag = t.boundingBox->getDiagonal();
 	double lowerBound = diagonal / 100000;
 	double upperBound = diagonal / 2;
 	int numIterations = 10;
 
 	for (int i = 0; i < size; i++) {
-		double targetVertexPercentage = targets[i];
+		//double targetVertexPercentage = targets[i];
 		TrajectorySimplification* simp = nullptr;
 		int tries = 0;
 		double newUpperbound = 0;
@@ -1554,7 +1554,7 @@ void makeSimplificationsForTrajectory(Trajectory &t, double diagonal, AlgorithmO
 		);
 		upperBound = newUpperbound;
 		numIterations -= 2;
-		double ratio = simp->size/(double)t.size;
+		//double ratio = simp->size/(double)t.size;
 		avgsBBRatio[i] += newUpperbound / diagonal;
 		t.simplifications.push_back(simp);
 	}
@@ -1784,7 +1784,6 @@ void preprocessDataSet(AlgoData *a) {
 }
 
 
-/*
 /*
     PRUNING STRATEGIES
     ==================================

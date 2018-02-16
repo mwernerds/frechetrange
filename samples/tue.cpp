@@ -2,21 +2,18 @@
 // Also determines number of worker threads used by the algorithm
 #include "tue.hpp"
 #include <stdio.h>
+#include <string>
 #include <thread>
 
 using namespace tue_details;
 
 int main(int argc, char *argv[])
 {
-	char * datasetFilename;
-	char * querysetFilename;
+	std::string datasetFilename = "dataset.txt";
+	std::string querysetFilename = "queries.txt";
 	if (argc == 3) {
-		datasetFilename = argv[1];
-		querysetFilename = argv[2];
-	}
-	else {
-		datasetFilename = "dataset.txt";
-		querysetFilename = "queries.txt";
+		datasetFilename = std::string(argv[1]);
+		querysetFilename = std::string(argv[2]);
 	}
 
 	long timeMS = std::chrono::system_clock::now().time_since_epoch() /
