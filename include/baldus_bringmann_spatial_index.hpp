@@ -1,6 +1,7 @@
 #ifndef BALDUS_BRINGMANN_SPATIAL_INDEX_INC
 #define BALDUS_BRINGMANN_SPATIAL_INDEX_INC
 
+// TODO: multithreading
 // A point in the n-dimensional space
 template <size_t dimensions>
 using nd_point = std::array<distance_t, dimensions>;
@@ -165,8 +166,8 @@ public:
   std::vector<const Trajectory *> get_close_curves(const Trajectory &t,
                                                    distance_t d) const {
     std::vector<const Trajectory *> resultSet;
-    auto pushBackResult = [&resultSet](const Trajectory *t) {
-      resultSet.push_back(t);
+    auto pushBackResult = [&resultSet](const Trajectory &t) {
+      resultSet.push_back(&t);
     };
     get_close_curves(t, d, pushBackResult);
     return resultSet;
@@ -183,11 +184,11 @@ public:
       const curve<Trajectory> &c2 = _curves[i];
 
       if (get_frechet_distance_upper_bound(t, c2.trajectory()) <= sqr(d)) {
-        output(&(c2.trajectory()));
+        output(c2.trajectory());
       } else if (negfilter(c, c2, d)) {
         continue;
       } else if (_decider.is_frechet_distance_at_most(c, c2, d)) {
-        output(&(c2.trajectory()));
+        output(c2.trajectory());
       }
     }
   }

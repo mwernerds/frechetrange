@@ -7,6 +7,7 @@
 * efficiently perform range queries on their MBR corners.
 * Trajectories are mapped to cells using one of the four bounding box corners.
 */
+// TODO: multithreading
 template <typename Trajectory, typename squareddistancefunctional,
           typename xgetterfunctional, typename ygetterfunctional>
 class Grid {
@@ -83,15 +84,15 @@ public:
   std::vector<const Trajectory *> rangeQuery(const Trajectory &query,
                                              double distanceThreshold) {
     std::vector<const Trajectory *> resultSet;
-    auto pushBackResult = [&resultSet](const Trajectory *t) {
-      resultSet.push_back(t);
+    auto pushBackResult = [&resultSet](const Trajectory &t) {
+      resultSet.push_back(&t);
     };
     rangeQuery(query, distanceThreshold, pushBackResult);
     return resultSet;
   }
 
   /**
-  * @param output Supports the method operator()(const Trajectory *)
+  * @param output Supports the method operator()(const Trajectory &)
   *               to output the result trajectories.
   */
   template <typename OutputFunctional>
@@ -607,7 +608,8 @@ private:
               threshold * threshold ||
           _decider.template isBoundedBy<Trajectory>(
               queryMBR.trajectory, trajMBR.trajectory, threshold)) {
-        output(&(trajMBR.trajectory));
+        const Trajectory& result = trajMBR.trajectory;
+        output(result);
       }
     }
   }

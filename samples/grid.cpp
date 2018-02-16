@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
   cout << endl;
   cout << "Data trajectories within Frechet distance " << distThreshold2
        << " of q2:" << endl;
-  auto output = [](const trajectory *t) {
-    for (const point &p : *t)
+  auto output = [](const trajectory &t) {
+    for (const point &p : t)
       cout << "( " << p[0] << ", " << p[1] << " ); ";
     cout << endl;
   };
