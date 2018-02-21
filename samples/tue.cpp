@@ -1,57 +1,60 @@
-// Entrypoint for the program, loads queryset and dataset and invokes main algorithm
-// Also determines number of worker threads used by the algorithm
-#include "tue.hpp"
-#include <stdio.h>
-#include <string>
-#include <thread>
+/*
+This sample illustrates how to use the grid data structure from a
+minimalistic, dependency-free C++ / STL project.
+*/
+#include <utility>
+#include <functional>
+#include <iostream>
+#include <vector>
 
-using namespace tue_details;
+#include "../include/tue.hpp"
 
-int main(int argc, char *argv[])
-{
-	std::string datasetFilename = "dataset.txt";
-	std::string querysetFilename = "queries.txt";
-	if (argc == 3) {
-		datasetFilename = std::string(argv[1]);
-		querysetFilename = std::string(argv[2]);
-	}
+using std::cout;
+using std::endl;
 
-	long timeMS = std::chrono::system_clock::now().time_since_epoch() /
-		std::chrono::milliseconds(1);
-	
-	std::cout << "Dataset: " << datasetFilename << " Queryset: " << querysetFilename << "\n";
+typedef std::pair<double, double> point;
+typedef std::vector<point> trajectory;
 
-	BoundingBox *box = new BoundingBox();
+std::function<double(const point &)> getx = [](const point &p) { return std::get<0>(p); };
+std::function<double(const point &)> gety = [](const point &p) { return std::get<1>(p); };
 
-	AlgoData a;
-	a.queries = a.fio.parseQueryFile(querysetFilename);
-	std::cout << "Loaded queries\n";
-	a.trajectoryNames = a.fio.parseDatasetFile(datasetFilename);
-	a.numTrajectories = a.trajectoryNames->size();
-	std::cout << "Loaded trajectories\n";
-	a.numWorkers = std::thread::hardware_concurrency();// worker threads == number of logical cores
-	a.boundingBox = box;
+int main(int argc, char **argv) {
+  trajectory t1 = {{0, 0}, {0, 1}, {0, 2}};
+  trajectory t2 = {{2, 2}, {4, 3}, {0, 3}};
+  trajectory q1 = {{1.5, 1.5}, {3, 2.5}, {3.5, 3.5}, {0, 2}};
+  const double distThreshold1 = 1.5;
+  trajectory q2 = {{1, 1}, {2, 2}, {1, 3}};
+  const double distThreshold2 = 2.0;
 
-	#if !USE_MULTITHREAD
-		a.numWorkers = 1;
-	#endif
+  tue_details::SpatialHash<
+      trajectory, decltype(getx), decltype(gety)>
+      spatialHash(getx, gety);
 
+  spatialHash.insert(t1);
+  spatialHash.insert(t2);
+  spatialHash.buildIndex();
 
-	std::cout << "Loaded dataset and query files\n";
+  // first version of rangeQuery: returning the result set
+  auto results = spatialHash.rangeQuery(q1, distThreshold1);
 
-	std::cout << "Num workers: " << a.numWorkers << "\n";
+  cout << "Data trajectories within Frechet distance " << distThreshold1
+       << " of q1:" << endl;
+  for (const trajectory *t : results) {
+    for (const point &p : *t)
+      cout << "( " << getx(p) << ", " << gety(p) << " ); ";
+    cout << endl;
+  }
 
-	runAlgorithm(&a);
+  // second version of rangeQuery: using an output functional
+  cout << endl;
+  cout << "Data trajectories within Frechet distance " << distThreshold2
+       << " of q2:" << endl;
+  auto output = [](const trajectory &t) {
+    for (const point &p : t)
+      cout << "( " << getx(p) << ", " << gety(p) << " ); ";
+    cout << endl;
+  };
+  spatialHash.rangeQuery(q2, distThreshold2, output);
 
-	timeMS = std::chrono::system_clock::now().time_since_epoch() /
-		std::chrono::milliseconds(1) - timeMS;
-
-	std::cout << "Total time: " << timeMS << "\n";
-
-
-	std::cout << "Done\n";
-
-
-
-	return 0;
+  return 0;
 }
