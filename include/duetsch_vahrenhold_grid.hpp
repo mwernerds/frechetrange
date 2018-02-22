@@ -16,7 +16,7 @@ public:
   * Creates a grid of the specified mesh size.
   */
   Grid(double meshSize, squareddistancefunctional dist2,
-       xgetterfunctional xGetter, ygetterfunctional yGetter)
+       const xgetterfunctional &xGetter, const ygetterfunctional &yGetter)
       : _meshSize(meshSize), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
         _useLeftBorder(), _useBottomBorder(), _optimized(false),
         _decider(dist2, xGetter, yGetter), _getX(xGetter), _getY(yGetter) {}
@@ -155,7 +155,7 @@ private:
     MBR(const MBR &) = default;
     MBR(MBR &&) = default;
     MBR &operator=(const MBR &) = default;
-    MBR &operator=(MBR &) = default;
+    MBR &operator=(MBR &&) = default;
 
     void initBorders(const xgetterfunctional &getX,
                      const ygetterfunctional &getY) {
@@ -224,7 +224,7 @@ private:
     Cell(const Cell &) = default;
     Cell(Cell &&) = default;
     Cell &operator=(const Cell &) = default;
-    Cell &operator=(Cell &) = default;
+    Cell &operator=(Cell &&) = default;
 
     template <bool left, bool bottom> void sort() {
       // decide whether to sort by x- or y-coordinates
@@ -608,7 +608,7 @@ private:
               threshold * threshold ||
           _decider.template isBoundedBy<Trajectory>(
               queryMBR.trajectory, trajMBR.trajectory, threshold)) {
-        const Trajectory& result = trajMBR.trajectory;
+        const Trajectory &result = trajMBR.trajectory;
         output(result);
       }
     }

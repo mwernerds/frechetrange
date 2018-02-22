@@ -30,8 +30,8 @@ constexpr long long constexpr_power(long long base, long long exponent) {
 }
 
 // Returns true iff the i-th lowest bit (starting at 0) in number is 1.
-constexpr bool bit_is_set(long long number, int i) {
-  return (number & (1 << i)) != 0;
+constexpr bool bit_is_set(long long number, size_t i) {
+  return (number & (static_cast<size_t>(1) << i)) != 0;
 }
 
 template <size_t dimensions, typename element, size_t max_elments_per_node>
@@ -145,8 +145,9 @@ template <typename Trajectory, typename squareddistancefunctional,
           typename xgetterfunctional, typename ygetterfunctional>
 class spatial_index {
 public:
-  spatial_index(squareddistancefunctional dist2, xgetterfunctional xGetter,
-                ygetterfunctional yGetter)
+  spatial_index(squareddistancefunctional dist2,
+                const xgetterfunctional &xGetter,
+                const ygetterfunctional &yGetter)
       : _q({{min_x, min_y, min_x, min_y, min_x, min_y, min_x, min_y}},
            {{max_x, max_y, max_x, max_y, max_x, max_y, max_x, max_y}}),
         _curves(), _decider(dist2, xGetter, yGetter), _dist2(dist2),
