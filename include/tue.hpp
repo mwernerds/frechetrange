@@ -50,8 +50,8 @@ class SpatialHash {
 	class CDFQShortcuts;
 
 public:
-	SpatialHash(xgetterfunctional xGetter,
-                ygetterfunctional yGetter) : _srcTrajectories(), _extTrajectories(), _boundingBox(), _diHash(slotsPerDimension, tolerance),
+	SpatialHash(const xgetterfunctional& xGetter,
+		        const ygetterfunctional& yGetter) : _srcTrajectories(), _extTrajectories(), _boundingBox(), _diHash(slotsPerDimension, tolerance),
 	           _count(0), _avgsBBRatio{0.0, 0.0, 0.0, 0.0},
 #ifdef USE_MULTITHREAD
         _simplificationMTX(), _startedSimplifying(),
@@ -191,11 +191,13 @@ private:
 		ExtTrajectory() = default;
 		ExtTrajectory(ExtTrajectory&&) = default;
 		
-		ExtTrajectory(const Trajectory &t, size_t idx, xgetterfunctional getX, ygetterfunctional getY) : index(idx) {
+		ExtTrajectory(const Trajectory &t, size_t idx, const xgetterfunctional& getX, const ygetterfunctional& getY) : index(idx) {
 			vertices.reserve(t.size());
 			addPoint(getX(t[0]), getY(t[0]));
+			distances.push_back(0.0);
+			totals.push_back(0.0);
 			sourceIndex.push_back(0);
-			for(size_t i = 1; i < size(); ++i) {
+			for(size_t i = 1; i < t.size(); ++i) {
 				const auto& v = t[i];
 				
 				// ignore duplicate verts, they are annoying
@@ -258,7 +260,7 @@ private:
 
 		//startpoints
 		double smax = dist2(pverts[pstart], qverts[qstart]);
-		double emax = dist2(pverts[psize], qverts[psize]);
+		double emax = dist2(pverts[psize - 1], qverts[qsize - 1]);
 		if (qdist == 0 || pdist == 0) return std::sqrt(std::max(emax, smax));
 		
 		double position = 0; // from 0 to 1
@@ -468,10 +470,10 @@ private:
 
 		size_t targetCounts[4];
 		for (int i = 0; i < 4; i++) {
-			targetCounts[i] = t.size() * targets[i];
-			targetCounts[i] = std::max<double>(20.0, targetCounts[i]);
+			targetCounts[i] = static_cast<size_t>(t.size() * targets[i]);
+			targetCounts[i] = std::max<size_t>(20, targetCounts[i]);
 		}
-		targetCounts[0] = std::min<double>(18.0, targetCounts[0]);//start simple in case dihash is useless
+		targetCounts[0] = std::min<size_t>(18, targetCounts[0]);//start simple in case dihash is useless
 
 		//double diag = t.boundingBox.getDiagonal();
 		double lowerBound = diagonal / 100000;
@@ -597,7 +599,7 @@ private:
 		}
 	}
 
-	void simplifyTrajectory(int tIndex, AgarwalSimplification &agarwal, BoundingBox& bbox) {
+	void simplifyTrajectory(size_t tIndex, AgarwalSimplification &agarwal, BoundingBox& bbox) {
 		ExtTrajectory &t = _extTrajectories[tIndex];
 		
 		if (t.size() > 1) {
@@ -632,7 +634,7 @@ private:
 		}
 #else
 		AgarwalSimplification agarwal;
-		for (int tIdx = 0; tIdx < _extTrajectories.size(); ++tIdx) {
+		for (size_t tIdx = 0; tIdx < _extTrajectories.size(); ++tIdx) {
 			simplifyTrajectory(tIdx, agarwal, _boundingBox);
 		}
 #endif
@@ -647,7 +649,7 @@ private:
 			if (current + simplificationBatchSize > _extTrajectories.size()) {
 				limit = _extTrajectories.size() - current;
 			}
-			for (int step = 0; step < limit; step++) {
+			for (size_t step = 0; step < limit; step++) {
 				simplifyTrajectory(current + step, agarwal, *bbox);
 			}
 			current = getConcurrentTrajectory();
@@ -802,10 +804,10 @@ private:
 
 			// ensure queue capacity
 			// WM: added offsets
-			int max = size_p - offset_p;
+			size_t max = size_p - offset_p;
 			if (size_q - offset_q > max) max = size_q - offset_q;
 			if (queue[0].size() < max) {
-				for (int i = queue[0].size(); i < max; i++) {
+				for (size_t i = queue[0].size(); i < max; i++) {
 					queue[0].push_back({ 0,0 });
 					queue[1].push_back({ 0,0 });
 				}
@@ -946,11 +948,11 @@ private:
 		}
 
 		bool calculate(const ExtTrajectory &P, const ExtTrajectory &Q, double queryDelta, double baseQueryDelta) {
-			return calculate(P.vertices, Q.vertices, 0, 0, P.size(), Q.size(), queryDelta, baseQueryDelta, P.simpPortals);
+			return calculate(P.vertices, Q.vertices, 0, 0, static_cast<int>(P.size()), static_cast<int>(Q.size()), queryDelta, baseQueryDelta, P.simpPortals);
 		}
 
 		bool calculate(const ExtTrajectory &P, const ExtTrajectory &Q, double queryDelta) {
-			return calculate(P.vertices, Q.vertices, 0, 0, P.size(), Q.size(), queryDelta, queryDelta, P.simpPortals);
+			return calculate(P.vertices, Q.vertices, 0, 0, static_cast<int>(P.size()), static_cast<int>(Q.size()), queryDelta, queryDelta, P.simpPortals);
 		}
 	};
 
@@ -1027,12 +1029,6 @@ private:
 	// double & search. The algorithm uses EqualTimeDistance.h to
 	// satisfy the agarwal constraints.
 	class AgarwalSimplification {
-		int doubleNSearchBase = 2;
-		double doubleNSearchExponentStep = 1;
-
-		std::vector<double> simpDistances;
-		std::vector<double> simpTotals;
-
 	public:
 		TrajectorySimplification simplify(ExtTrajectory &t, double simplificationEpsilon) {
 			TrajectorySimplification simplified(simplificationEpsilon);
@@ -1047,7 +1043,7 @@ private:
 			int rangeStart = 1;
 			int prevk = 0;
 			while (true) {
-				int k = findLastFrechetMatch(P, simplified.vertices, t.totals, simplified.totals, t.distances, simplified.distances, simplified.vertices.size(), rangeStart, t.size(), prevk, simplificationEpsilon);
+				int k = findLastFrechetMatch(P, simplified.vertices, t.totals, simplified.totals, t.distances, simplified.distances, static_cast<int>(simplified.vertices.size()), rangeStart, static_cast<int>(t.size()), prevk, simplificationEpsilon);
 				simpSize++;
 				simplified.vertices[simpSize - 1] = P[k];
 				if (k == t.size() - 1) {
@@ -1071,8 +1067,10 @@ private:
 			int start, int end, int prevk, double epsilon) {
 			simp.push_back(P[0]);
 			simpdists.push_back(0);
-			simpTotals.push_back(0);
+			simptotals.push_back(0);
 			// Use lambda's to easily double & search the function from (start) to (end)
+			constexpr int doubleNSearchBase = 2;
+			constexpr double doubleNSearchExponentStep = 1.0;
 			return doubleNsearch(
 				[&](int index) -> bool {
 					simp[simpSize] = P[index];
@@ -1101,9 +1099,6 @@ private:
 	// double & search. The algorithm uses EqualTimeDistance.h to
 	// satisfy the agarwal constraints.
 	class ProgressiveAgarwal {
-		int doubleNSearchBase = 2;
-		double doubleNSearchExponentStep = 1;
-
 	public:
 		TrajectorySimplification simplify(ExtTrajectory &parent, ExtTrajectory &sourceTrajectory, double simplificationEpsilon) {
 			TrajectorySimplification simplified(simplificationEpsilon);
@@ -1119,7 +1114,7 @@ private:
 			int rangeStart = 1;
 			int prevk = 0;
 			while (true) {
-				int k = findLastFrechetMatch(P, simplified.vertices, parent.totals, simplified.totals, parent.distances, simplified.distances, simplified.vertices.size(), rangeStart, parent.size(), prevk, simplificationEpsilon, parent.sourceIndex, sourceTrajectory, simplified.portals);
+				int k = findLastFrechetMatch(P, simplified.vertices, parent.totals, simplified.totals, parent.distances, simplified.distances, static_cast<int>(simplified.vertices.size()), rangeStart, static_cast<int>(parent.size()), prevk, simplificationEpsilon, parent.sourceIndex, sourceTrajectory, simplified.portals);
 				simpSize++;
 				simplified.vertices[simpSize - 1] = P[k];
 				simplified.sourceIndex.push_back(parent.sourceIndex[k]);
@@ -1149,13 +1144,15 @@ private:
 			simpdists.push_back(0);
 			simptotals.push_back(0);
 			// Use lambda's to easily double & search the function from (start) to (end)
+			constexpr int doubleNSearchBase = 2;
+			constexpr double doubleNSearchExponentStep = 1.0;
 			return doubleNsearch(
 				[&](int index) -> bool {
 					simp[simpSize] = P[index];
 					simpdists[simpSize] = dist(simp[simpSize], simp[simpSize - 1]);
 					simptotals[simpSize] = simptotals[simpSize - 1] + simpdists[simpSize];
-					int end = 0;
-					int start = parentSourceIndices[prevk];
+					size_t end = 0;
+					size_t start = parentSourceIndices[prevk];
 					if (index + 1 >= parentSourceIndices.size()) {
 						end = sourceTrajectory.size();
 					}
@@ -1166,8 +1163,8 @@ private:
 						sourceTrajectory.vertices, simp,
 						sourceTrajectory.totals, simptotals,
 						sourceTrajectory.distances, simpdists,
-						end, simpSize + 1,
-						start, simpSize - 1
+						static_cast<int>(end), simpSize + 1,
+						static_cast<int>(start), simpSize - 1
 					);
 					Portal p;
 					p.source = prevk;
