@@ -2,9 +2,9 @@
 This sample illustrates how to use the grid data structure from a
 minimalistic, dependency-free C++ / STL project.
 */
-#include <utility>
 #include <functional>
 #include <iostream>
+#include <utility>
 #include <vector>
 
 #include "../include/tue.hpp"
@@ -15,8 +15,12 @@ using std::endl;
 typedef std::pair<double, double> point;
 typedef std::vector<point> trajectory;
 
-std::function<double(const point &)> getx = [](const point &p) { return std::get<0>(p); };
-std::function<double(const point &)> gety = [](const point &p) { return std::get<1>(p); };
+std::function<double(const point &)> getx = [](const point &p) {
+  return std::get<0>(p);
+};
+std::function<double(const point &)> gety = [](const point &p) {
+  return std::get<1>(p);
+};
 
 int main(int argc, char **argv) {
   trajectory t1 = {{0, 0}, {0, 1}, {0, 2}};
@@ -26,8 +30,7 @@ int main(int argc, char **argv) {
   trajectory q2 = {{1, 1}, {2, 2}, {1, 3}};
   const double distThreshold2 = 2.0;
 
-  tue_details::SpatialHash<
-      trajectory, decltype(getx), decltype(gety)>
+  tue_details::SpatialHash<trajectory, decltype(getx), decltype(gety)>
       spatialHash(getx, gety);
 
   spatialHash.insert(t1);
