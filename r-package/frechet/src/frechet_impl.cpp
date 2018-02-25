@@ -1,64 +1,56 @@
-
 #include <Rcpp.h>
 // [[Rcpp::plugins(cpp11)]]
 
-#include "../../../include/frechetrange.hpp"
 #include <array>
 #include <functional>
-using namespace Rcpp;
 
-struct ContainerAdapterRow {
-  const NumericMatrix &m;
-  size_t row;
-  ContainerAdapterRow(const NumericMatrix &_m, size_t _row)
-      : m(_m), row(_row){};
-  double operator[](size_t col) const { return m(row, col); }
-};
+#include "../../../include/frechetrange.hpp"
 
-struct ContainerAdapter {
+using Rcpp::NumericMatrix;
+using Rcpp::List;
+using Rcpp::Rcout;
 
-  const NumericMatrix &m;
-  typedef ContainerAdapterRow value_type;
-  ContainerAdapter(NumericMatrix &_m) : m(_m){};
-  ContainerAdapter(const NumericMatrix &_m) : m(_m){};
-  const ContainerAdapterRow operator[](size_t row) const {
+typedef NumericMatrix::ConstRow point_adapter;
 
-    return ContainerAdapterRow(m, row);
-    ;
+struct trajectory_adapter {
+  const NumericMatrix &_m;
+  
+  typedef point_adapter value_type;
+
+  trajectory_adapter(const NumericMatrix &m) : _m(m){};
+  point_adapter operator[](size_t idx) const {
+    return _m.row(idx);
   }
 
-  size_t size() const { return m.nrow(); }
+  size_t size() const { return _m.nrow(); }
 };
 
 //@todo: check for 2D in the R interface
 
-auto dist_sqr = [](ContainerAdapterRow r1, ContainerAdapterRow r2) {
-  return ((r2[0] - r1[0]) * (r2[0] - r1[0]) +
-          (r2[1] - r1[1]) * (r2[1] - r1[1]));
+struct get_adapter_coord {
+  template <size_t dim> static double get(const point_adapter &c) {
+    return c[dim];
+  }
 };
-auto getx = [](ContainerAdapterRow r1) { return r1[0]; };
-auto gety = [](ContainerAdapterRow r1) { return r1[1]; };
 
-frechetrange::detail::duetschvahrenhold::FrechetDistance<
-    decltype(dist_sqr), decltype(getx), decltype(gety)>
-    fd(dist_sqr, getx, gety);
+frechetrange::detail::duetschvahrenhold::frechet_distance<
+    2, get_adapter_coord> fd;
 
-frechetrange::detail::baldusbringmann::FrechetDistance<
-    decltype(dist_sqr), decltype(getx), decltype(gety)>
-    fd2(dist_sqr, getx, gety);
+frechetrange::detail::baldusbringmann::frechet_distance<
+    2, get_adapter_coord> fd2;
 
 // [[Rcpp::export]]
 bool internal_frechet_decide_dv(NumericMatrix &t1, NumericMatrix &t2,
                                 double dist) {
-  ContainerAdapter c1(t1), c2(t2);
-  return fd.isBoundedBy(c1, c2, dist);
+  trajectory_adapter c1(t1), c2(t2);
+  return fd.is_bounded_by(c1, c2, dist);
 }
 
 // [[Rcpp::export]]
 bool internal_frechet_decide_bb(NumericMatrix &t1, NumericMatrix &t2,
                                 double dist) {
-  ContainerAdapter c1(t1), c2(t2);
-  return fd2.is_frechet_distance_at_most(c1, c2, dist);
+  trajectory_adapter c1(t1), c2(t2);
+  return fd2.is_bounded_by(c1, c2, dist);
 }
 
 // --- point types, trajectory types, and global functions ---
@@ -67,16 +59,11 @@ constexpr size_t g_DIMENSIONS = 2;
 template <size_t dims>
 using _point_t = std::array<double, dims>;
 
-auto g_getX = [](const _point_t<g_DIMENSIONS> &p) {
-    return p[0];
-  };
-auto g_getY = [](const _point_t<g_DIMENSIONS> &p) {
-    return p[1];
-  };
-auto g_dist2 = [](const _point_t<g_DIMENSIONS> &p, const _point_t<g_DIMENSIONS> &q) {
-    return (q[0] - p[0]) * (q[0] - p[0]) +
-           (q[1] - p[1]) * (q[1] - p[1]);
-  };
+struct get_point_coord {
+  template <size_t dim> static double get(const _point_t<g_DIMENSIONS> &p) {
+    return std::get<dim>(p);
+  }
+};
 
 template <size_t dims>
 using _trajectory_t = std::vector<_point_t<dims>>;
@@ -109,22 +96,22 @@ List _resultToList(std::vector<const _trajectory_t<dims>*> results) {
 
 // ------------------- Grid -------------------
 
-/// GridDataset caches the data outside of R to have valid container
+/// grid_data caches the data outside of R to have valid container
 /// as some of the implementations are not yet compatible.
-template <size_t dims> class GridDataset {
+template <size_t dims> class grid_data {
 public:
   const size_t DIMENSIONS = dims;
   
-  typedef frechetrange::detail::duetschvahrenhold::Grid<
-      _trajectory_t<dims>, decltype(g_dist2), decltype(g_getX), decltype(g_getY)>
+  typedef frechetrange::detail::duetschvahrenhold::grid<dims,
+      _trajectory_t<dims>, get_point_coord>
       grid_type;
 
-  GridDataset() : _pGrid(nullptr), _trajectories() {}
-  ~GridDataset() { delete _pGrid; }
+  grid_data() : _pGrid(nullptr), _trajectories() {}
+  ~grid_data() { delete _pGrid; }
 
   grid_type &grid() { return *_pGrid; }
   
-  size_t addTrajectory(const NumericMatrix &m) {
+  size_t add_trajectory(const NumericMatrix &m) {
     _trajectories.emplace_back(m.nrow());
     _copyMatrixToTrajectory(m, _trajectories.back());
     return (_trajectories.size() - 1);
@@ -134,13 +121,13 @@ public:
 
   void clear() { _trajectories.clear(); }
 
-  void buildIndex(double meshSize) {
-    _pGrid = new grid_type(meshSize, g_dist2, g_getX, g_getY);
+  void build_index(double meshSize) {
+    _pGrid = new grid_type(meshSize);
     _pGrid->reserve(size());
     for (_trajectory_t<dims> &t : _trajectories)
       _pGrid->insert(std::move(t));
     clear();
-    _pGrid->optimize();
+    _pGrid->build_index();
   }
   
 private:
@@ -148,13 +135,13 @@ private:
   std::vector<_trajectory_t<dims>> _trajectories;
 };
 
-std::vector<GridDataset<g_DIMENSIONS>> g_grids;
+std::vector<grid_data<g_DIMENSIONS>> g_grids;
 
 #define ASSERT_VALID_DATASET(dataset, k)                                       \
   {                                                                            \
     if (k < 0 || k >= dataset.size())                                          \
       throw(std::runtime_error(                                                \
-          "Invalid Handle. Create one with createGridDataset"));               \
+          "Invalid Handle."));               \
   }
 
 // [[Rcpp::export]]
@@ -166,7 +153,7 @@ size_t internal_createGrid() {
 // [[Rcpp::export]]
 size_t internal_addTrajectoryToGrid(size_t gds, const NumericMatrix &m) {
   ASSERT_VALID_DATASET(g_grids, gds);
-  return g_grids[gds].addTrajectory(m);
+  return g_grids[gds].add_trajectory(m);
 }
 
 // [[Rcpp::export]]
@@ -179,7 +166,7 @@ size_t internal_clearGrid(size_t gds) {
 bool internal_buildIndex(size_t gds, double meshSize) {
   ASSERT_VALID_DATASET(g_grids, gds);
   Rcout << "Creating Index from " << g_grids[gds].size() << " trajectories";
-  g_grids[gds].buildIndex(meshSize);
+  g_grids[gds].build_index(meshSize);
 }
 
 // [[Rcpp::export]]
@@ -189,7 +176,7 @@ List internal_gridRangeQuery(size_t gds, const NumericMatrix &m, double dist,
   _trajectory_t<g_DIMENSIONS> t(m.nrow());
   _copyMatrixToTrajectory<g_DIMENSIONS>(m, t);
   
-  auto results = g_grids[gds].grid().rangeQuery(t, dist);
+  auto results = g_grids[gds].grid().range_query(t, dist);
   return _resultToList<g_DIMENSIONS>(results);
 }
 
@@ -197,13 +184,13 @@ List internal_gridRangeQuery(size_t gds, const NumericMatrix &m, double dist,
 
 template <size_t dims>
 using _tree_index_type = frechetrange::detail::baldusbringmann::spatial_index<
-    _trajectory_t<dims>, decltype(g_dist2), decltype(g_getX), decltype(g_getY)>;
+    2, _trajectory_t<dims>, get_point_coord>;
 
 std::vector<_tree_index_type<g_DIMENSIONS>> g_treeIndices;
 
 // [[Rcpp::export]]
 size_t internal_createTreeIndex() {
-  g_treeIndices.emplace_back(g_dist2, g_getX, g_getY);
+  g_treeIndices.emplace_back();
   return g_treeIndices.size() - 1;
 }
 
@@ -212,7 +199,7 @@ size_t internal_addTrajectoryToTree(size_t tds, const NumericMatrix &m) {
   ASSERT_VALID_DATASET(g_treeIndices, tds);
   _trajectory_t<g_DIMENSIONS> t(m.nrow());
   _copyMatrixToTrajectory<g_DIMENSIONS>(m, t);
-  g_treeIndices[tds].add_curve(t);
+  g_treeIndices[tds].insert(t);
   return (g_treeIndices[tds].size() - 1);
 }
 
@@ -223,6 +210,6 @@ List internal_treeRangeQuery(size_t tds, const NumericMatrix &m, double dist,
   _trajectory_t<g_DIMENSIONS> t(m.nrow());
   _copyMatrixToTrajectory<g_DIMENSIONS>(m, t);
   
-  auto results = g_treeIndices[tds].get_close_curves(t, dist);
+  auto results = g_treeIndices[tds].range_query(t, dist);
   return _resultToList<g_DIMENSIONS>(results);
 }
