@@ -10,17 +10,14 @@ minimalistic, dependency-free C++ / STL project.
 using std::cout;
 using std::endl;
 
-typedef std::vector<double> point;
-typedef std::function<double(const point &, const point &)>
-    distance_functional_type;
+typedef std::pair<double, double> point;
 typedef std::vector<point> trajectory;
 
-distance_functional_type squared_dist = [](point p1, point p2) {
-  // provide a squared distance functional for the point type
-  return (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]);
+struct get_coordinate {
+  template <size_t dim> static double get(const point &p) {
+    return std::get<dim>(p);
+  }
 };
-std::function<double(const point &)> getx = [](const point &p) { return p[0]; };
-std::function<double(const point &)> gety = [](const point &p) { return p[1]; };
 
 int main(int argc, char **argv) {
   trajectory t1 = {{0, 0}, {0, 1}, {0, 2}};
@@ -31,23 +28,24 @@ int main(int argc, char **argv) {
   const double distThreshold2 = 2.0;
 
   double meshSize = std::max(distThreshold1, distThreshold2);
-  frechetrange::detail::duetschvahrenhold::Grid<
-      trajectory, distance_functional_type, decltype(getx), decltype(gety)>
-      grid(meshSize, squared_dist, getx, gety);
+  frechetrange::detail::duetschvahrenhold::grid<
+      2, trajectory, get_coordinate,
+      frechetrange::euclidean_distance_sqr<2, get_coordinate>>
+      grid(meshSize);
 
   grid.reserve(2); // not mandatory, but advised in case of many inserts
   grid.insert(t1);
   grid.insert(t2);
-  grid.optimize(); // not mandatory, but advised after completing inserts
+  grid.build_index(); // not mandatory, but advised after completing inserts
 
   // first version of rangeQuery: returning the result set
-  auto results = grid.rangeQuery(q1, distThreshold1);
+  auto results = grid.range_query(q1, distThreshold1);
 
   cout << "Data trajectories within Frechet distance " << distThreshold1
        << " of q1:" << endl;
   for (const trajectory *t : results) {
     for (const point &p : *t)
-      cout << "( " << p[0] << ", " << p[1] << " ); ";
+      cout << "( " << p.first << ", " << p.second << " ); ";
     cout << endl;
   }
 
@@ -57,10 +55,10 @@ int main(int argc, char **argv) {
        << " of q2:" << endl;
   auto output = [](const trajectory &t) {
     for (const point &p : t)
-      cout << "( " << p[0] << ", " << p[1] << " ); ";
+      cout << "( " << p.first << ", " << p.second << " ); ";
     cout << endl;
   };
-  grid.rangeQuery(q2, distThreshold2, output);
+  grid.range_query(q2, distThreshold2, output);
 
   return 0;
 }

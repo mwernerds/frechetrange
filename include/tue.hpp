@@ -31,7 +31,7 @@ submitted to the ACM SIGSPATIAL GIS Cup 2017
 
 template <typename Trajectory, typename xgetterfunctional,
           typename ygetterfunctional>
-class SpatialHash {
+class spatial_hash {
   struct Point;
   typedef std::vector<Point> Vertices;
   struct BoundingBox;
@@ -45,18 +45,17 @@ class SpatialHash {
   class CDFQShortcuts;
 
 public:
-  SpatialHash(const xgetterfunctional &xGetter,
-              const ygetterfunctional &yGetter)
+  spatial_hash(const xgetterfunctional &getX, const ygetterfunctional &getY)
       : _srcTrajectories(), _extTrajectories(), _boundingBox(),
         _diHash(slotsPerDimension, tolerance), _count(0),
         _avgsBBRatio{0.0, 0.0, 0.0, 0.0},
 #ifdef USE_MULTITHREAD
         _simplificationMTX(), _startedSimplifying(),
 #endif
-        _getX(xGetter), _getY(yGetter) {
+        _getX(getX), _getY(getY) {
   }
 
-  void insert(const Trajectory &trajectory) {
+  void add(const Trajectory &trajectory) {
     if (trajectory.size() > 0) {
       _srcTrajectories.push_back(trajectory);
       _extTrajectories.emplace_back(trajectory, _extTrajectories.size(), _getX,
@@ -65,18 +64,18 @@ public:
   }
 
   // Does all needed preprocessing for the given the dataset
-  void buildIndex() {
+  void build_index() {
     constructSimplifications();
     addPtsToDiHash();
   }
 
-  std::vector<const Trajectory *> rangeQuery(const Trajectory &query,
-                                             double distanceThreshold) {
+  std::vector<const Trajectory *> range_query(const Trajectory &query,
+                                              double distanceThreshold) {
     std::vector<const Trajectory *> resultSet;
     auto pushBackResult = [&resultSet](const Trajectory &t) {
       resultSet.push_back(&t);
     };
-    rangeQuery(query, distanceThreshold, pushBackResult);
+    range_query(query, distanceThreshold, pushBackResult);
     return resultSet;
   }
 
@@ -85,8 +84,8 @@ public:
   *               to output the result trajectories.
   */
   template <typename OutputFunctional>
-  void rangeQuery(const Trajectory &query, double distanceThreshold,
-                  OutputFunctional &output) {
+  void range_query(const Trajectory &query, double distanceThreshold,
+                   OutputFunctional &output) {
     ExtTrajectory queryTrajectory(query, 0, _getX, _getY);
 
     ProgressiveAgarwal agarwalProg;
@@ -683,7 +682,7 @@ private:
 
     _startedSimplifying = 0;
     for (size_t i = 0; i < numWorkers; i++) {
-      simplificationThreads.emplace_back(&SpatialHash::simplificationWorker,
+      simplificationThreads.emplace_back(&spatial_hash::simplificationWorker,
                                          this, &(bboxes[i]));
     }
     for (size_t i = 0; i < numWorkers; i++) {

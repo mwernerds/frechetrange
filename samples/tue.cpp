@@ -30,15 +30,15 @@ int main(int argc, char **argv) {
   trajectory q2 = {{1, 1}, {2, 2}, {1, 3}};
   const double distThreshold2 = 2.0;
 
-  tue_details::SpatialHash<trajectory, decltype(getx), decltype(gety)>
+  tue_details::spatial_hash<trajectory, decltype(getx), decltype(gety)>
       spatialHash(getx, gety);
 
-  spatialHash.insert(t1);
-  spatialHash.insert(t2);
-  spatialHash.buildIndex();
+  spatialHash.add(t1);
+  spatialHash.add(t2);
+  spatialHash.build_index();
 
   // first version of rangeQuery: returning the result set
-  auto results = spatialHash.rangeQuery(q1, distThreshold1);
+  auto results = spatialHash.range_query(q1, distThreshold1);
 
   cout << "Data trajectories within Frechet distance " << distThreshold1
        << " of q1:" << endl;
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
       cout << "( " << getx(p) << ", " << gety(p) << " ); ";
     cout << endl;
   };
-  spatialHash.rangeQuery(q2, distThreshold2, output);
+  spatialHash.range_query(q2, distThreshold2, output);
 
   return 0;
 }
