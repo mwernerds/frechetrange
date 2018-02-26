@@ -14,7 +14,9 @@
 #include <thread>
 #endif
 
-namespace tue_details {
+namespace frechetrange {
+namespace detail {
+namespace tue {
 /*
     This is the collected and reordered (but not redactionally completed)
 implementation of
@@ -28,9 +30,9 @@ submitted to the ACM SIGSPATIAL GIS Cup 2017
 
   Refactored by Fabian and Martin
 */
-
-template <typename Trajectory, typename xgetterfunctional,
-          typename ygetterfunctional>
+// TODO: distance functional
+// TODO: multidimensional
+template <size_t dimensions, typename Trajectory, typename get_coordinate>
 class spatial_hash {
   struct Point;
   typedef std::vector<Point> Vertices;
@@ -45,21 +47,23 @@ class spatial_hash {
   class CDFQShortcuts;
 
 public:
-  spatial_hash(const xgetterfunctional &getX, const ygetterfunctional &getY)
+  spatial_hash()
       : _srcTrajectories(), _extTrajectories(), _boundingBox(),
-        _diHash(slotsPerDimension, tolerance), _count(0),
-        _avgsBBRatio{0.0, 0.0, 0.0, 0.0},
+        _diHash(slotsPerDimension, tolerance), _count(0), _avgsBBRatio {
+    0.0, 0.0, 0.0, 0.0
+  }
 #ifdef USE_MULTITHREAD
-        _simplificationMTX(), _startedSimplifying(),
+  , _simplificationMTX(), _startedSimplifying()
 #endif
-        _getX(getX), _getY(getY) {
+  {
   }
 
-  void add(const Trajectory &trajectory) {
+  size_t size() const { return _srcTrajectories.size(); }
+
+  void insert(const Trajectory &trajectory) {
     if (trajectory.size() > 0) {
       _srcTrajectories.push_back(trajectory);
-      _extTrajectories.emplace_back(trajectory, _extTrajectories.size(), _getX,
-                                    _getY);
+      _extTrajectories.emplace_back(trajectory, _extTrajectories.size());
     }
   }
 
@@ -86,7 +90,7 @@ public:
   template <typename OutputFunctional>
   void range_query(const Trajectory &query, double distanceThreshold,
                    OutputFunctional &output) {
-    ExtTrajectory queryTrajectory(query, 0, _getX, _getY);
+    ExtTrajectory queryTrajectory(query, 0);
 
     ProgressiveAgarwal agarwalProg;
     double diagonal = queryTrajectory.boundingBox.getDiagonal();
@@ -137,9 +141,6 @@ private:
   std::mutex _simplificationMTX;
   volatile int _startedSimplifying;
 #endif
-
-  xgetterfunctional _getX;
-  ygetterfunctional _getY;
 
   /* DATA STRUCTURES */
 
@@ -207,11 +208,10 @@ private:
     ExtTrajectory() = default;
     ExtTrajectory(ExtTrajectory &&) = default;
 
-    ExtTrajectory(const Trajectory &t, size_t idx,
-                  const xgetterfunctional &getX, const ygetterfunctional &getY)
-        : index(idx) {
+    ExtTrajectory(const Trajectory &t, size_t idx) : index(idx) {
       vertices.reserve(t.size());
-      addPoint(getX(t[0]), getY(t[0]));
+      addPoint(get_coordinate::template get<0>(t[0]),
+               get_coordinate::template get<1>(t[0]));
       distances.push_back(0.0);
       totals.push_back(0.0);
       sourceIndex.push_back(0);
@@ -220,8 +220,10 @@ private:
 
         // ignore duplicate verts, they are annoying
         const Point &prev = vertices.back();
-        if (prev.x != getX(v) || prev.y != getY(v)) {
-          addPoint(getX(t[i]), getY(t[i]));
+        if (prev.x != get_coordinate::template get<0>(v) ||
+            prev.y != get_coordinate::template get<1>(v)) {
+          addPoint(get_coordinate::template get<0>(t[i]),
+                   get_coordinate::template get<1>(t[i]));
           distances.push_back(dist(prev, vertices.back()));
           totals.push_back(totals.back() + distances.back());
           sourceIndex.push_back(i);
@@ -1271,4 +1273,6 @@ private:
   };
 };
 } // namespace tue
-#endif // TUE
+}
+}
+#endif // TUE_INC

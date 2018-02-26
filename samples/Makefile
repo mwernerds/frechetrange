@@ -6,4 +6,4 @@ all:
 	g++ -o tue tue.cpp -Wall -Wno-sign-compare -std=c++11 -DUSE_MULTITHREAD -lpthread
 
 clean:
-	rm plain bg grid spatial_index tue
+	rm -f plain bg grid spatial_index tue

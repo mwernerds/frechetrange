@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "../../../include/frechetrange.hpp"
+#include "../../../include/tue.hpp"
 
 using Rcpp::NumericMatrix;
 using Rcpp::List;
@@ -219,4 +220,42 @@ List internal_bb_range_query(size_t handle, const NumericMatrix &m, double dist)
 
 // ------------------- tue::spatial_hash -------------------
 
+template <size_t dims>
+using tue_index_type = frechetrange::detail::tue::spatial_hash<
+    g_DIMENSIONS, _trajectory_t<dims>, get_point_coord>;
 
+std::vector<tue_index_type<g_DIMENSIONS>> g_tue_indices;
+
+// [[Rcpp::export]]
+size_t internal_tue_create_index() {
+  g_tue_indices.emplace_back();
+  return g_tue_indices.size() - 1;
+}
+
+// [[Rcpp::export]]
+size_t internal_tue_add_trajectory(size_t handle, const NumericMatrix &m) {
+  ASSERT_VALID_DATASET(g_tue_indices, handle);
+  _trajectory_t<g_DIMENSIONS> t(m.nrow());
+  _copyMatrixToTrajectory<g_DIMENSIONS>(m, t);
+  g_tue_indices[handle].insert(t);
+  return (g_tue_indices[handle].size() - 1);
+}
+
+// [[Rcpp::export]]
+bool internal_tue_build_index(size_t handle) {
+  ASSERT_VALID_DATASET(g_tue_indices, handle);
+  Rcout << "Creating tue index from " << g_tue_indices[handle].size() << " trajectories.";
+  g_tue_indices[handle].build_index();
+}
+
+// [[Rcpp::export]]
+List internal_tue_range_query(size_t handle, const NumericMatrix &m, double dist) {
+  ASSERT_VALID_DATASET(g_tue_indices, handle);
+  _trajectory_t<g_DIMENSIONS> t(m.nrow());
+  _copyMatrixToTrajectory<g_DIMENSIONS>(m, t);
+
+  List resultSet;
+  append_to_list<g_DIMENSIONS> append(resultSet);
+  g_tue_indices[handle].range_query(t, dist, append);
+  return resultSet;
+}

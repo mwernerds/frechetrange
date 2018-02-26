@@ -15,11 +15,10 @@ using std::endl;
 typedef std::pair<double, double> point;
 typedef std::vector<point> trajectory;
 
-std::function<double(const point &)> getx = [](const point &p) {
-  return std::get<0>(p);
-};
-std::function<double(const point &)> gety = [](const point &p) {
-  return std::get<1>(p);
+struct get_coordinate {
+  template <size_t dim> static double get(const point &p) {
+    return std::get<dim>(p);
+  }
 };
 
 int main(int argc, char **argv) {
@@ -30,11 +29,11 @@ int main(int argc, char **argv) {
   trajectory q2 = {{1, 1}, {2, 2}, {1, 3}};
   const double distThreshold2 = 2.0;
 
-  tue_details::spatial_hash<trajectory, decltype(getx), decltype(gety)>
-      spatialHash(getx, gety);
+  frechetrange::detail::tue::spatial_hash<2, trajectory, get_coordinate>
+      spatialHash;
 
-  spatialHash.add(t1);
-  spatialHash.add(t2);
+  spatialHash.insert(t1);
+  spatialHash.insert(t2);
   spatialHash.build_index();
 
   // first version of rangeQuery: returning the result set
@@ -44,7 +43,7 @@ int main(int argc, char **argv) {
        << " of q1:" << endl;
   for (const trajectory *t : results) {
     for (const point &p : *t)
-      cout << "( " << getx(p) << ", " << gety(p) << " ); ";
+      cout << "( " << p.first << ", " << p.second << " ); ";
     cout << endl;
   }
 
@@ -54,7 +53,7 @@ int main(int argc, char **argv) {
        << " of q2:" << endl;
   auto output = [](const trajectory &t) {
     for (const point &p : t)
-      cout << "( " << getx(p) << ", " << gety(p) << " ); ";
+      cout << "( " << p.first << ", " << p.second << " ); ";
     cout << endl;
   };
   spatialHash.range_query(q2, distThreshold2, output);
