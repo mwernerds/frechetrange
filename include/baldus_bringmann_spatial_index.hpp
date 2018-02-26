@@ -1,6 +1,8 @@
 #ifndef BALDUS_BRINGMANN_SPATIAL_INDEX_INC
 #define BALDUS_BRINGMANN_SPATIAL_INDEX_INC
 
+// TODO: multithreading
+// TODO: multidimensional
 // A point in the n-dimensional space
 template <size_t dimensions>
 using nd_point = std::array<distance_t, dimensions>;
@@ -29,8 +31,8 @@ constexpr long long constexpr_power(long long base, long long exponent) {
 }
 
 // Returns true iff the i-th lowest bit (starting at 0) in number is 1.
-constexpr bool bit_is_set(long long number, int i) {
-  return (number & (1 << i)) != 0;
+constexpr bool bit_is_set(long long number, size_t i) {
+  return (number & (static_cast<size_t>(1) << i)) != 0;
 }
 
 template <size_t dimensions, typename element, size_t max_elments_per_node>
@@ -140,20 +142,19 @@ using quadtree = quadtree_node<dimensions, element, max_elments_per_node>;
 
 // ----------- spatial_index -----------
 
-template <typename Trajectory, typename squareddistancefunctional,
-          typename xgetterfunctional, typename ygetterfunctional>
+template <size_t dimensions, typename Trajectory, typename get_coordinate,
+          typename squared_distance =
+              euclidean_distance_sqr<dimensions, get_coordinate>>
 class spatial_index {
 public:
-  spatial_index(squareddistancefunctional dist2, xgetterfunctional xGetter,
-                ygetterfunctional yGetter)
+  spatial_index(const squared_distance &dist2 = squared_distance())
       : _q({{min_x, min_y, min_x, min_y, min_x, min_y, min_x, min_y}},
            {{max_x, max_y, max_x, max_y, max_x, max_y, max_x, max_y}}),
-        _curves(), _decider(dist2, xGetter, yGetter), _dist2(dist2),
-        _getX(xGetter), _getY(yGetter) {}
+        _curves(), _dist2(dist2), _frechetDistance(dist2) {}
 
   size_t size() const { return _curves.size(); }
 
-  void add_curve(const Trajectory &t) {
+  void insert(const Trajectory &t) {
     _q.add(_curves.size(), get_position(t));
     _curves.emplace_back(t, _dist2);
   }
@@ -162,19 +163,19 @@ public:
   // less.
   // The result may however contain some whose frechet distance to c is too
   // large.
-  std::vector<const Trajectory *> get_close_curves(const Trajectory &t,
-                                                   distance_t d) const {
+  std::vector<const Trajectory *> range_query(const Trajectory &t,
+                                              distance_t d) const {
     std::vector<const Trajectory *> resultSet;
-    auto pushBackResult = [&resultSet](const Trajectory *t) {
-      resultSet.push_back(t);
+    auto pushBackResult = [&resultSet](const Trajectory &t) {
+      resultSet.push_back(&t);
     };
-    get_close_curves(t, d, pushBackResult);
+    range_query(t, d, pushBackResult);
     return resultSet;
   }
 
   template <typename OutputFunctional>
-  void get_close_curves(const Trajectory &t, distance_t d,
-                        OutputFunctional &output) const {
+  void range_query(const Trajectory &t, distance_t d,
+                   OutputFunctional &output) const {
     // TODO: don't copy t
     curve<Trajectory> c(t, _dist2);
     std::vector<size_t> potential_curves = _q.get(get_position(t), d);
@@ -183,11 +184,11 @@ public:
       const curve<Trajectory> &c2 = _curves[i];
 
       if (get_frechet_distance_upper_bound(t, c2.trajectory()) <= sqr(d)) {
-        output(&(c2.trajectory()));
+        output(c2.trajectory());
       } else if (negfilter(c, c2, d)) {
         continue;
-      } else if (_decider.is_frechet_distance_at_most(c, c2, d)) {
-        output(&(c2.trajectory()));
+      } else if (_frechetDistance.is_bounded_by(c, c2, d)) {
+        output(c2.trajectory());
       }
     }
   }
@@ -200,26 +201,26 @@ private:
       _q; // first x, first y, last x, last y, min x, min y, max x, max y
   std::vector<curve<Trajectory>> _curves;
 
-  FrechetDistance<squareddistancefunctional, xgetterfunctional,
-                  ygetterfunctional>
-      _decider;
-  squareddistancefunctional _dist2;
-  xgetterfunctional _getX;
-  ygetterfunctional _getY;
+  squared_distance _dist2;
+  frechet_distance<dimensions, get_coordinate, squared_distance>
+      _frechetDistance;
 
-  template <typename Point> distance_t dist(Point &p, Point &q) {
+  template <typename Point> distance_t dist(Point &p, Point &q) const {
     return std::sqrt(_dist2(p, q));
   }
 
   nd_point<8> get_position(const Trajectory &t) const {
     size_t last = t.size() - 1;
-    nd_point<8> p = {{_getX(t[0]), _getY(t[0]), _getX(t[last]), _getY(t[last]),
-                      max_x, max_y, min_x, min_y}};
+    nd_point<8> p = {{get_coordinate::template get<0>(t[0]),
+                      get_coordinate::template get<1>(t[0]),
+                      get_coordinate::template get<0>(t[last]),
+                      get_coordinate::template get<1>(t[last]), max_x, max_y,
+                      min_x, min_y}};
     for (size_t i = 0; i <= last; ++i) {
-      p[4] = std::min(p[4], _getX(t[i]));
-      p[5] = std::min(p[5], _getY(t[i]));
-      p[6] = std::max(p[6], _getX(t[i]));
-      p[7] = std::max(p[7], _getY(t[i]));
+      p[4] = std::min(p[4], get_coordinate::template get<0>(t[i]));
+      p[5] = std::min(p[5], get_coordinate::template get<1>(t[i]));
+      p[6] = std::max(p[6], get_coordinate::template get<0>(t[i]));
+      p[7] = std::max(p[7], get_coordinate::template get<1>(t[i]));
     }
     return p;
   }
@@ -279,7 +280,7 @@ private:
         }
       } else {
         delta = std::min(delta, t.size() - 1 - k);
-        if (std::sqrt(_dist2(p, t[k])) - c.curve_length(k, k + delta) > d) {
+        if (dist(p, t[k]) - c.curve_length(k, k + delta) > d) {
           k += delta;
           delta *= 2;
         } else if (delta > 1) {

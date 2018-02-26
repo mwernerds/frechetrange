@@ -7,27 +7,28 @@
 * efficiently perform range queries on their MBR corners.
 * Trajectories are mapped to cells using one of the four bounding box corners.
 */
-template <typename Trajectory, typename squareddistancefunctional,
-          typename xgetterfunctional, typename ygetterfunctional>
-class Grid {
+// TODO: multidimensional
+template <size_t dimensions, typename Trajectory, typename get_coordinate,
+          typename squared_distance =
+              euclidean_distance_sqr<dimensions, get_coordinate>>
+class grid {
 public:
   /**
   * Creates a grid of the specified mesh size.
   */
-  Grid(double meshSize, squareddistancefunctional dist2,
-       xgetterfunctional xGetter, ygetterfunctional yGetter)
+  grid(double meshSize, const squared_distance &dist2 = squared_distance())
       : _meshSize(meshSize), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
         _useLeftBorder(), _useBottomBorder(), _optimized(false),
-        _decider(dist2, xGetter, yGetter), _getX(xGetter), _getY(yGetter) {}
-  Grid(const Grid &) = default;
-  Grid(Grid &&) = default;
-  Grid &operator=(const Grid &) = default;
-  Grid &operator=(Grid &&) = default;
+        _frechetDistance(dist2) {}
+  grid(const grid &) = default;
+  grid(grid &&) = default;
+  grid &operator=(const grid &) = default;
+  grid &operator=(grid &&) = default;
 
   /**
   * Returns the mesh size of this grid.
   */
-  double getMeshSize() const { return _meshSize; }
+  double mesh_size() const { return _meshSize; }
 
   /**
   * Reserves internal storage so that the indicated number
@@ -42,12 +43,12 @@ public:
 
   void insert(const Trajectory &trajectory) {
     if (trajectory.size() > 0)
-      insertImpl(MBR(trajectory, _getX, _getY));
+      insertImpl(MBR(trajectory));
   }
 
   void insert(Trajectory &&trajectory) {
     if (trajectory.size() > 0)
-      insertImpl(MBR(std::move(trajectory), _getX, _getY));
+      insertImpl(MBR(std::move(trajectory)));
   }
 
   /**
@@ -55,7 +56,8 @@ public:
   * the expected query cost. Furthermore, the grid cells are sorted
   * to achieve better query times.
   */
-  void optimize() {
+  void build_index() {
+    // TODO: multithreading
     if (_optimized)
       return;
 
@@ -80,23 +82,23 @@ public:
     _optimized = true;
   }
 
-  std::vector<const Trajectory *> rangeQuery(const Trajectory &query,
-                                             double distanceThreshold) {
+  std::vector<const Trajectory *> range_query(const Trajectory &query,
+                                              double distanceThreshold) {
     std::vector<const Trajectory *> resultSet;
-    auto pushBackResult = [&resultSet](const Trajectory *t) {
-      resultSet.push_back(t);
+    auto pushBackResult = [&resultSet](const Trajectory &t) {
+      resultSet.push_back(&t);
     };
-    rangeQuery(query, distanceThreshold, pushBackResult);
+    range_query(query, distanceThreshold, pushBackResult);
     return resultSet;
   }
 
   /**
-  * @param output Supports the method operator()(const Trajectory *)
+  * @param output Supports the method operator()(const Trajectory &)
   *               to output the result trajectories.
   */
   template <typename OutputFunctional>
-  void rangeQuery(const Trajectory &query, double distanceThreshold,
-                  OutputFunctional &output) {
+  void range_query(const Trajectory &query, double distanceThreshold,
+                   OutputFunctional &output) {
     if (query.size() == 0)
       return;
     else if (distanceThreshold > _meshSize)
@@ -140,35 +142,26 @@ private:
     */
     double minX, maxX, minY, maxY;
 
-    MBR(const Trajectory &t, const xgetterfunctional &getX,
-        const ygetterfunctional &getY)
-        : trajectory(t) {
-      initBorders(getX, getY);
-    }
-    MBR(Trajectory &&t, const xgetterfunctional getX,
-        const ygetterfunctional &getY)
-        : trajectory(std::move(t)) {
-      initBorders(getX, getY);
-    }
+    MBR(const Trajectory &t) : trajectory(t) { initBorders(); }
+    MBR(Trajectory &&t) : trajectory(std::move(t)) { initBorders(); }
     MBR() = default;
     MBR(const MBR &) = default;
     MBR(MBR &&) = default;
     MBR &operator=(const MBR &) = default;
-    MBR &operator=(MBR &) = default;
+    MBR &operator=(MBR &&) = default;
 
-    void initBorders(const xgetterfunctional &getX,
-                     const ygetterfunctional &getY) {
-      minX = maxX = getX(trajectory[0]);
-      minY = maxY = getY(trajectory[0]);
+    void initBorders() {
+      minX = maxX = get_coordinate::template get<0>(trajectory[0]);
+      minY = maxY = get_coordinate::template get<1>(trajectory[0]);
 
       for (size_t i = 1; i < trajectory.size(); ++i) {
-        auto xCoord = getX(trajectory[i]);
+        auto xCoord = get_coordinate::template get<0>(trajectory[i]);
         if (xCoord < minX)
           minX = xCoord;
         else if (xCoord > maxX)
           maxX = xCoord;
 
-        auto yCoord = getY(trajectory[i]);
+        auto yCoord = get_coordinate::template get<1>(trajectory[i]);
         if (yCoord < minY)
           minY = yCoord;
         else if (yCoord > maxY)
@@ -223,7 +216,7 @@ private:
     Cell(const Cell &) = default;
     Cell(Cell &&) = default;
     Cell &operator=(const Cell &) = default;
-    Cell &operator=(Cell &) = default;
+    Cell &operator=(Cell &&) = default;
 
     template <bool left, bool bottom> void sort() {
       // decide whether to sort by x- or y-coordinates
@@ -323,11 +316,8 @@ private:
   */
   bool _optimized;
 
-  mutable FrechetDistance<squareddistancefunctional, xgetterfunctional,
-                          ygetterfunctional>
-      _decider;
-  xgetterfunctional _getX;
-  ygetterfunctional _getY;
+  mutable frechet_distance<dimensions, get_coordinate, squared_distance>
+      _frechetDistance;
 
   long long toCellNr(double pointCoord) const {
     return static_cast<long long>(std::floor(pointCoord / _meshSize));
@@ -417,7 +407,7 @@ private:
 
   template <bool left, bool bottom, typename Output>
   void query(const Trajectory &query, double threshold, Output &output) const {
-    MBR queryMBR(query, _getX, _getY);
+    MBR queryMBR(query);
     // check which horizontal neighbor cells need to be visited
     double cellCoordX = toCellCoord(queryMBR.template getBorder<true, left>());
     bool visitLeft =
@@ -605,9 +595,10 @@ private:
       // if it is within Fréchet distance of the query trajectory
       if (squaredfarthestBBDistance(queryMBR, trajMBR) <=
               threshold * threshold ||
-          _decider.template isBoundedBy<Trajectory>(
+          _frechetDistance.template is_bounded_by<Trajectory>(
               queryMBR.trajectory, trajMBR.trajectory, threshold)) {
-        output(&(trajMBR.trajectory));
+        const Trajectory &result = trajMBR.trajectory;
+        output(result);
       }
     }
   }

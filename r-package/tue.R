@@ -36,17 +36,20 @@ datalist = tsplit(sanfrancisco);
 queryIndex = 5;
 
 ### Create a handle for holding the data
-ds = internal_createTreeIndex();
+ds = internal_tue_create_index();
 ### Feed the data into C++
-tmp = lapply(datalist, function(x) internal_addTrajectoryToTree(ds,as.matrix(x)));
+tmp = lapply(datalist, function(x) internal_tue_add_trajectory(ds,as.matrix(x)));
+### Now, build the index.
+meshSize = 1.0;
+internal_tue_build_index(ds);
 
 ### Now, query
-result = internal_treeRangeQuery(ds,as.matrix(datalist[[queryIndex]]),.02);
+result = internal_tue_range_query(ds,as.matrix(datalist[[queryIndex]]),.02);
 print(sprintf("Range query found %d",length(result)));
 
 
 ### And visualize (query is red and thick, dataset is gray, found is black and small)
-png("tree.png")
+png("tue.png")
 plot(sanfrancisco,t="l", col="gray");
 lines(datalist[[queryIndex]],col="red", lwd=5)
 lapply(result, function(x) lines(x,col="black"))

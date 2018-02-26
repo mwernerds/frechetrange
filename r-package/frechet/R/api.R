@@ -36,11 +36,11 @@ frechet.decide <- function(t1,t2,eps, algorithm="duetschvahrenhold")
     M2 =internal.frechet.coerce2matrix(t2)
     if (algorithm == "duetschvahrenhold")
     {
-        return (internal_frechet_decide_dv(M1,M2,eps));
+        return (internal_dv_frechet_decide(M1,M2,eps));
     }
     if (algorithm == "bringmanbaldus")
     {
-        return (internal_frechet_decide_bb(M1,M2,eps));
+        return (internal_bb_frechet_decide(M1,M2,eps));
     }
     stop("Invalid algorithm. Only duetschvahrenhold and bringmanbaldus are valid decider implementations for now.");
 }

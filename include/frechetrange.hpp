@@ -21,13 +21,14 @@
 *     frechetrange      contains boilerplate and unifying code making all
 *                       relevant aspects of the submissions accessible with a
 *                       single interface.
+*         struct euclidean_distance_sqr
 *         detail            contains implementation details of the three
 *                           approaches well-isolated
 *             duetschvarhenhold
-*                 class FrechetDistance
-*                 class Grid
+*                 class frechet_distance
+*                 class grid
 *             baldusbringmann
-*                 class FrechetDistance
+*                 class frechet_distance
 *                 class spatial_index
 *
 *
@@ -48,6 +49,59 @@
 
 namespace frechetrange {
 namespace detail {
+// template meta programming
+template <typename point, typename get_coordinate, size_t dim>
+struct sum_of_sqr_diffs {
+  static double dist(const point &p, const point &q) {
+    auto delta_dim = get_coordinate::template get<dim - 1>(p) -
+                     get_coordinate::template get<dim - 1>(q);
+    return static_cast<double>(delta_dim * delta_dim) +
+           sum_of_sqr_diffs<point, get_coordinate, dim - 1>::dist(p, q);
+  }
+};
+
+template <typename point, typename get_coordinate>
+struct sum_of_sqr_diffs<point, get_coordinate, 0> {
+  static double dist(const point &, const point &) { return 0.0; }
+};
+
+template <typename point, typename get_coordinate, size_t dim>
+struct add_sum_of_pairwise_diff_prods {
+  static void calc(const point &p, const point &q, const point &m, double &a,
+                   double &b, double &c) {
+    // u := q - p
+    auto u_dim = get_coordinate::template get<dim - 1>(q) -
+                 get_coordinate::template get<dim - 1>(p);
+    // v := p - m
+    auto v_dim = get_coordinate::template get<dim - 1>(p) -
+                 get_coordinate::template get<dim - 1>(m);
+
+    a += u_dim * u_dim;
+    b += u_dim * v_dim;
+    c += v_dim * v_dim;
+
+    add_sum_of_pairwise_diff_prods<point, get_coordinate, dim - 1>::calc(
+        p, q, m, a, b, c);
+  }
+};
+
+template <typename point, typename get_coordinate>
+struct add_sum_of_pairwise_diff_prods<point, get_coordinate, 0> {
+  static void calc(const point &, const point &, const point &, double &a,
+                   double &b, double &c) {}
+};
+}
+
+template <size_t dimensions, typename get_coordinate>
+struct euclidean_distance_sqr {
+  template <typename point>
+  double operator()(const point &p, const point &q) const {
+    return detail::sum_of_sqr_diffs<point, get_coordinate, dimensions>::dist(p,
+                                                                             q);
+  }
+};
+
+namespace detail {
 namespace duetschvahrenhold {
 // source code from Fabian Dütsch, templatized and generalized by Martin
 /**
@@ -55,15 +109,18 @@ namespace duetschvahrenhold {
 */
 static constexpr double BEGIN_NOT_REACHABLE = 2.0;
 
-template <typename squareddistancefunctional, typename xgetterfunctional,
-          typename ygetterfunctional>
-class FrechetDistance {
+template <size_t dimensions, typename get_coordinate,
+          typename squared_distance =
+              euclidean_distance_sqr<dimensions, get_coordinate>>
+class frechet_distance {
 public:
-  FrechetDistance(squareddistancefunctional dist2, xgetterfunctional xGetter,
-                  ygetterfunctional yGetter)
-      : _dist2(dist2), _getX(xGetter), _getY(yGetter),
-        _leftSegmentBegins(nullptr), _capacity(0) {}
-  ~FrechetDistance() { delete[] _leftSegmentBegins; }
+  frechet_distance(const squared_distance &dist2 = squared_distance())
+      : _dist2(dist2), _leftSegmentBegins() {}
+
+  frechet_distance(const frechet_distance &) = default;
+  frechet_distance(frechet_distance &&) = default;
+  frechet_distance &operator=(const frechet_distance &) = default;
+  frechet_distance &operator=(frechet_distance &&) = default;
 
   /**
   * Returns whether the Fréchet distance of the passed trajectories is bounded
@@ -71,9 +128,9 @@ public:
   * @pre Neither of the trajectories is empty.
   */
   template <typename Trajectory>
-  bool isBoundedBy(const Trajectory &traj1, const Trajectory &traj2,
-                   double distanceBound) const {
-    const double boundSquared = distanceBound * distanceBound;
+  bool is_bounded_by(const Trajectory &traj1, const Trajectory &traj2,
+                     double distance_bound) const {
+    const double boundSquared = distance_bound * distance_bound;
 
     // ensure that the corners of the free space diagram are reachable
     if (_dist2(traj1[0], traj2[0]) > boundSquared ||
@@ -99,9 +156,7 @@ public:
   }
 
 private:
-  squareddistancefunctional _dist2;
-  xgetterfunctional _getX;
-  ygetterfunctional _getY;
+  squared_distance _dist2;
 
   /**
   * Beginnings of reachable parts of the free space segments on
@@ -109,11 +164,7 @@ private:
   * processed (and accordingly the left segments of the current column).
   * A segment is reachable, if its respective beginning is <= 1.0.
   */
-  mutable double *_leftSegmentBegins;
-  /**
-  * Allocated size of the array _leftSegmentBegins
-  */
-  mutable size_t _capacity;
+  mutable std::vector<double> _leftSegmentBegins;
 
   /**
   * Decides the Fréchet distance problem for a trajectory consisting of only
@@ -341,14 +392,12 @@ private:
   */
   void clearFrontline(size_t rows) const {
     // reserve memory, if necessary
-    if (_capacity < rows) {
-      delete[] _leftSegmentBegins;
-      _leftSegmentBegins = new double[rows];
-      _capacity = rows;
+    if (_leftSegmentBegins.size() < rows) {
+      _leftSegmentBegins.resize(rows, BEGIN_NOT_REACHABLE);
     }
 
     // mark the frontline as not reachable
-    std::fill_n(_leftSegmentBegins, rows, BEGIN_NOT_REACHABLE);
+    std::fill_n(_leftSegmentBegins.begin(), rows, BEGIN_NOT_REACHABLE);
   }
 
   /**
@@ -361,32 +410,24 @@ private:
   *                 (p1 + end * (p2-p1)) is the second intersection,
   *                 if it exists, or unchanged, otherwise.
   */
-  template <typename point_type>
-  void getLineCircleIntersections(const point_type &p1, const point_type &p2,
-                                  const point_type &cp,
-                                  const double radiusSquared, double &begin,
-                                  double &end) const {
-    // TODO: Adapt to template parameter squareddistancefunctional;
-    //       The following assumes the Euclidean distance.
-
+  template <typename point>
+  void getLineCircleIntersections(const point &p1, const point &p2,
+                                  const point &cp, const double radiusSquared,
+                                  double &begin, double &end) const {
     // Compute the points p1+x*(p2-p1) on the segment from p1 to p2
     // that intersect the circle around cp with radius r:
     // d(cp, p1+x*(p2-p1))^2 = r^2  <=>  a*x^2 + bx + c = 0,
     // where a, b, c, and the auxiliary vectors u and v are defined as follows:
-
-    // u := p2 - p1
-    double ux = _getX(p2) - _getX(p1);
-    double uy = _getY(p2) - _getY(p1);
-    // v := p1 - c
-    double vx = _getX(p1) - _getX(cp);
-    double vy = _getY(p1) - _getY(cp);
-
+    // u := p2 - p1, and v := p1 - cp
     // a := u^2
-    double a = ux * ux + uy * uy;
-    // b := 2 * dotProduct(u, v)
-    double b = 2 * (vx * ux + vy * uy);
-    // c := v^2 - r^2
-    double c = vx * vx + vy * vy - radiusSquared;
+    double a = 0.0;
+    // b := 2 * dotProduct(u, v),
+    double b = 0.0;
+    // c := v^2 - r^2,
+    double c = -radiusSquared;
+    add_sum_of_pairwise_diff_prods<point, get_coordinate, dimensions>::calc(
+        p1, p2, cp, a, b, c);
+    b *= 2.0;
 
     // Solve by quadratic formula:
     // x_1,2 = (-b +- sqrt(b^2-4ac)) / 2a
@@ -474,8 +515,8 @@ template <typename Trajectory> class curve {
   std::vector<distance_t> _prefix_length;
 
 public:
-  template <typename squareddistancefunctional>
-  curve(const Trajectory &t, squareddistancefunctional &dist2)
+  template <typename squared_distance>
+  curve(const Trajectory &t, const squared_distance &dist2)
       : _trajectory(t), _prefix_length(t.size()) {
     _prefix_length[0] = 0;
     for (size_t i = 1; i < t.size(); ++i)
@@ -494,14 +535,13 @@ public:
   }
 };
 
-template <typename squareddistancefunctional, typename xgetterfunctional,
-          typename ygetterfunctional>
-class FrechetDistance {
+template <size_t dimensions, typename get_coordinate,
+          typename squared_distance =
+              euclidean_distance_sqr<dimensions, get_coordinate>>
+class frechet_distance {
   static constexpr distance_t eps = 10e-10;
 
-  squareddistancefunctional _dist2;
-  xgetterfunctional _getX;
-  ygetterfunctional _getY;
+  squared_distance _dist2;
 
   /*Section 1: special types and their elementary operations*/
   typedef std::pair<distance_t, distance_t> interval; // .first is the
@@ -517,19 +557,10 @@ class FrechetDistance {
     return i.first >= i.second;
   }
 
-  template <typename Point>
-  interval intersection_interval(const Point &circle_center, distance_t radius,
-                                 const Point &line_start,
-                                 const Point &line_end) const {
-    // The line can be represented as line_start + lambda * v
-    distance_t vX = _getX(line_end) - _getX(line_start);
-    distance_t vY = _getY(line_end) - _getY(line_start);
-
-    // move the circle center to (0, 0) to simplify the calculation
-    // line_start - circle_center;
-    distance_t shiftedStartX = _getX(line_start) - _getX(circle_center);
-    distance_t shiftedStartY = _getY(line_start) - _getY(circle_center);
-
+  template <typename point>
+  interval intersection_interval(const point &circle_center, distance_t radius,
+                                 const point &line_start,
+                                 const point &line_end) const {
     // Find points p = line_start + lambda * v with
     //     dist(p, circle_center) = radius
     // <=> sqrt(p.x^2 + p.y^2) = radius
@@ -547,9 +578,11 @@ class FrechetDistance {
     // <=> lambda^2 + (b / a) * lambda + c / a) = 0
     // <=> lambda1/2 = - (b / 2a) +/- sqrt((b / 2a)^2 - c / a)
 
-    distance_t a = sqr(vX) + sqr(vY);
-    distance_t b = (shiftedStartX * vX + shiftedStartY * vY);
-    distance_t c = sqr(shiftedStartX) + sqr(shiftedStartY) - sqr(radius);
+    distance_t a = 0.0;
+    distance_t b = 0.0;
+    distance_t c = -sqr(radius);
+    add_sum_of_pairwise_diff_prods<point, get_coordinate, dimensions>::calc(
+        line_start, line_end, circle_center, a, b, c);
 
     distance_t discriminant = sqr(b / a) - c / a;
 
@@ -568,8 +601,8 @@ class FrechetDistance {
   }
 
   /*Section 2: Elementary Frechet operations*/
-  template <typename Trajectory, typename Point>
-  distance_t get_dist_to_point_sqr(const Trajectory &t, const Point &p) const {
+  template <typename Trajectory, typename point>
+  distance_t get_dist_to_point_sqr(const Trajectory &t, const point &p) const {
     distance_t result = 0;
     for (size_t i = 0; i < t.size(); ++i)
       result = std::max(result, _dist2(t[i], p));
@@ -696,21 +729,24 @@ class FrechetDistance {
   }
 
 public:
-  FrechetDistance(squareddistancefunctional dist2, xgetterfunctional getX,
-                  ygetterfunctional getY)
-      : _dist2(dist2), _getX(getX), _getY(getY){};
+  frechet_distance(const squared_distance &dist2 = squared_distance())
+      : _dist2(dist2) {}
+
+  frechet_distance(const frechet_distance &) = default;
+  frechet_distance(frechet_distance &&) = default;
+  frechet_distance &operator=(const frechet_distance &) = default;
+  frechet_distance &operator=(frechet_distance &&) = default;
 
   template <typename Trajectory>
-  bool is_frechet_distance_at_most(const Trajectory &a, const Trajectory &b,
-                                   distance_t d) const {
-    return is_frechet_distance_at_most(curve<Trajectory>(a, _dist2),
-                                       curve<Trajectory>(b, _dist2), d);
+  bool is_bounded_by(const Trajectory &a, const Trajectory &b,
+                     distance_t d) const {
+    return is_bounded_by(curve<Trajectory>(a, _dist2),
+                         curve<Trajectory>(b, _dist2), d);
   }
 
   template <typename Trajectory>
-  bool is_frechet_distance_at_most(const curve<Trajectory> &c1,
-                                   const curve<Trajectory> &c2,
-                                   distance_t d) const {
+  bool is_bounded_by(const curve<Trajectory> &c1, const curve<Trajectory> &c2,
+                     distance_t d) const {
     assert(c1.size());
     assert(c2.size());
 

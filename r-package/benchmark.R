@@ -29,8 +29,8 @@ M2 = formats[["t.matrix"]][[2]];
 
 
 tm <- microbenchmark(
-    internal_frechet_decide_dv(M1,M2,2.99),
-    internal_frechet_decide_bb(M1,M2,2.99),
+    internal_dv_frechet_decide(M1,M2,2.99),
+    internal_bb_frechet_decide(M1,M2,2.99),
     frechet.decide(M1,M2,2.99,"duetschvahrenhold"),
     frechet.decide(M1,M2,2.99,"bringmanbaldus"),
     times=10000L)

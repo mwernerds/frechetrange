@@ -21,14 +21,25 @@ two versions are given:
 using std::cout;
 using std::endl;
 namespace bg = boost::geometry;
+
 // Declare Geometry
 typedef bg::model::point<double, 2, bg::cs::cartesian> point_type;
 typedef bg::model::linestring<point_type> linestring_type;
 
+struct get_coordinate {
+  template <size_t dim> static double get(const point_type &p) {
+    return p.get<dim>();
+  }
+};
+
+struct squared_distance {
+  double operator()(const point_type &p, const point_type &q) const {
+    return bg::comparable_distance(p, q);
+  }
+};
+
 int main(int argc, char **argv) {
-
   // Linestring version
-
   linestring_type t1, t2;
 
   // read from WKT
@@ -36,24 +47,15 @@ int main(int argc, char **argv) {
   bg::read_wkt("LINESTRING(1 1, 2 2, 1 3)", t2);
 
   // instantiate some decider, this time fully specified.
-  frechetrange::detail::duetschvahrenhold::FrechetDistance<
-      std::function<double(
-          const point_type &,
-          const point_type &)>, // the squared distance signature
-      std::function<double(const point_type &)>, // the X getter signature
-      std::function<double(const point_type &)>> // the Y getter signature
-      fd(
-          [](const point_type &p1, const point_type &p2) {
-            return bg::comparable_distance(p1, p2);
-          }, // the squared distance
-          [](const point_type &p) { return bg::get<0>(p); },
-          [](const point_type &p) { return bg::get<1>(p); });
+  frechetrange::detail::duetschvahrenhold::frechet_distance<2, get_coordinate,
+                                                            squared_distance>
+      fd;
 
   cout << std::fixed;
   // a range scan
   for (double d = 1; d < 5; d += 0.25)
     cout << "Reachable at " << d << ":\t"
-         << (fd.isBoundedBy(t1, t2, d) ? "yes" : "no") << endl;
+         << (fd.is_bounded_by(t1, t2, d) ? "yes" : "no") << endl;
 
   // estimate the distance by interval cutting
   {
@@ -61,7 +63,7 @@ int main(int argc, char **argv) {
     while ((interval.second - interval.first) > 0.001) {
       double m = (interval.first + interval.second) / 2;
 
-      if (fd.isBoundedBy(t1, t2, m)) {
+      if (fd.is_bounded_by(t1, t2, m)) {
         interval.second = m;
       } else {
         interval.first = m;
@@ -73,24 +75,15 @@ int main(int argc, char **argv) {
 
   // Bringmann Baldus Case
 
-  frechetrange::detail::baldusbringmann::FrechetDistance<
-      std::function<double(
-          const point_type &,
-          const point_type &)>, // the squared distance signature
-      std::function<double(const point_type &)>, // the X getter signature
-      std::function<double(const point_type &)>> // the Y getter signature
-      fd2(
-          [](const point_type &p1, const point_type &p2) {
-            return bg::comparable_distance(p1, p2);
-          }, // the squared distance
-          [](const point_type &p) { return bg::get<0>(p); },
-          [](const point_type &p) { return bg::get<1>(p); });
+  frechetrange::detail::baldusbringmann::frechet_distance<2, get_coordinate,
+                                                          squared_distance>
+      fd2;
 
   cout << std::fixed;
   // a range scan
   for (double d = 1; d < 5; d += 0.25)
     cout << "Reachable at " << d << ":\t"
-         << (fd2.is_frechet_distance_at_most(t1, t2, d) ? "yes" : "no") << endl;
+         << (fd2.is_bounded_by(t1, t2, d) ? "yes" : "no") << endl;
 
   // estimate the distance by interval cutting
   {
@@ -98,7 +91,7 @@ int main(int argc, char **argv) {
     while ((interval.second - interval.first) > 0.001) {
       double m = (interval.first + interval.second) / 2;
 
-      if (fd2.is_frechet_distance_at_most(t1, t2, m)) {
+      if (fd2.is_bounded_by(t1, t2, m)) {
         interval.second = m;
       } else {
         interval.first = m;
