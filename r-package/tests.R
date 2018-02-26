@@ -134,7 +134,7 @@ quiet=lapply(1:length(formats), function(i){
 });
 
 
-print(sprintf("DV Decider: %d",internal_frechet_decide_dv(formats[["t.matrix"]][[1]]+3,formats[["t.matrix"]][[2]]+5,1)))
+print(sprintf("DV Decider: %d",internal_dv_frechet_decide(formats[["t.matrix"]][[1]]+3,formats[["t.matrix"]][[2]]+5,1)))
 
 ### and calculate it (distance is 2)
 M1 = formats[["t.matrix"]][[1]];
@@ -151,8 +151,8 @@ library("ggplot2")
 library("microbenchmark")
 
 tm <- microbenchmark(
-    internal_frechet_decide_dv(M1,M2,2.99),
-    internal_frechet_decide_bb(M1,M2,2.99),
+    internal_dv_frechet_decide(M1,M2,2.99),
+    internal_bb_frechet_decide(M1,M2,2.99),
     frechet.decide(M1,M2,2.99,"duetschvahrenhold"),
     frechet.decide(M1,M2,2.99,"bringmanbaldus"),
     times=10000L)
