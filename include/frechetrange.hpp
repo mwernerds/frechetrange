@@ -65,11 +65,10 @@ struct sum_of_sqr_diffs<point, get_coordinate, 0> {
   static double dist(const point &, const point &) { return 0.0; }
 };
 
-
 template <typename point, typename get_coordinate, size_t dim>
 struct add_sum_of_pairwise_diff_prods {
-  static void calc(const point &p, const point &q,
-                   const point &m, double &a, double &b, double &c) {
+  static void calc(const point &p, const point &q, const point &m, double &a,
+                   double &b, double &c) {
     // u := q - p
     auto u_dim = get_coordinate::template get<dim - 1>(q) -
                  get_coordinate::template get<dim - 1>(p);
@@ -80,14 +79,16 @@ struct add_sum_of_pairwise_diff_prods {
     a += u_dim * u_dim;
     b += u_dim * v_dim;
     c += v_dim * v_dim;
-	
-	add_sum_of_pairwise_diff_prods<point, get_coordinate, dim - 1>::calc(p, q, m, a, b, c);
+
+    add_sum_of_pairwise_diff_prods<point, get_coordinate, dim - 1>::calc(
+        p, q, m, a, b, c);
   }
 };
 
 template <typename point, typename get_coordinate>
 struct add_sum_of_pairwise_diff_prods<point, get_coordinate, 0> {
-  static void calc(const point &, const point &, const point &, double &a, double &b, double &c) {}
+  static void calc(const point &, const point &, const point &, double &a,
+                   double &b, double &c) {}
 };
 }
 
@@ -411,22 +412,22 @@ private:
   */
   template <typename point>
   void getLineCircleIntersections(const point &p1, const point &p2,
-                                  const point &cp,
-                                  const double radiusSquared, double &begin,
-                                  double &end) const {
+                                  const point &cp, const double radiusSquared,
+                                  double &begin, double &end) const {
     // Compute the points p1+x*(p2-p1) on the segment from p1 to p2
     // that intersect the circle around cp with radius r:
     // d(cp, p1+x*(p2-p1))^2 = r^2  <=>  a*x^2 + bx + c = 0,
     // where a, b, c, and the auxiliary vectors u and v are defined as follows:
     // u := p2 - p1, and v := p1 - cp
     // a := u^2
-	double a = 0.0;
+    double a = 0.0;
     // b := 2 * dotProduct(u, v),
     double b = 0.0;
     // c := v^2 - r^2,
     double c = -radiusSquared;
-    add_sum_of_pairwise_diff_prods<point, get_coordinate, dimensions>::calc(p1, p2, cp, a, b, c);
-	b*= 2.0;
+    add_sum_of_pairwise_diff_prods<point, get_coordinate, dimensions>::calc(
+        p1, p2, cp, a, b, c);
+    b *= 2.0;
 
     // Solve by quadratic formula:
     // x_1,2 = (-b +- sqrt(b^2-4ac)) / 2a
@@ -577,10 +578,11 @@ class frechet_distance {
     // <=> lambda^2 + (b / a) * lambda + c / a) = 0
     // <=> lambda1/2 = - (b / 2a) +/- sqrt((b / 2a)^2 - c / a)
 
-	distance_t a = 0.0;
+    distance_t a = 0.0;
     distance_t b = 0.0;
-    distance_t c = - sqr(radius);
-    add_sum_of_pairwise_diff_prods<point, get_coordinate, dimensions>::calc(line_start, line_end, circle_center, a, b, c);
+    distance_t c = -sqr(radius);
+    add_sum_of_pairwise_diff_prods<point, get_coordinate, dimensions>::calc(
+        line_start, line_end, circle_center, a, b, c);
 
     distance_t discriminant = sqr(b / a) - c / a;
 

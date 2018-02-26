@@ -4,6 +4,8 @@ minimalistic, dependency-free C++ / STL project.
 */
 #include <functional>
 #include <iostream>
+#include <utility>
+#include <vector>
 
 #include "../include/frechetrange.hpp"
 
