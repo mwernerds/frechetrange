@@ -1,6 +1,8 @@
 #ifndef TUE_INC
 #define TUE_INC
 
+//#define USE_MULTITHREAD
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -344,8 +346,8 @@ private:
   }
 
   struct Range {
-    double start;
-    double end;
+    double start = 0.0;
+    double end = 0.0;
 
     bool isComplete() const { return start == 0.0 && end == 1.0; }
   };
@@ -482,7 +484,7 @@ private:
         min = _limits[0][0];
         max = _limits[0][1];
         break;
-      case 'y':
+      default: // case 'y':
         min = _limits[1][0];
         max = _limits[1][1];
         break;
@@ -989,32 +991,35 @@ private:
             // try and jump
             if (!outsideQueue && queueSize[second] > 0 &&
                 queue[second][queueSize[second] - 1].end_row_index == row &&
-                Rf.end == 1) {
+                Rf.end == 1.0) {
               // jump-off point possible
               // check if minimum jump distance is big enough
               int gapSize = queue[first][qIndex].end_row_index -
                             queue[first][qIndex].start_row_index;
               if (gapSize > 1) {
-                const std::vector<Portal> &ports = portals.at(row);
-                choice.source = -1;
-                for (const Portal &p : ports) {
-                  // int jumpSize = p.destination - p.source;
-                  // check if jump within range
-                  if (p.destination <= queue[first][qIndex].end_row_index) {
-                    // check if jump distance fits
-                    double segmentFrechet =
-                        computeSegmentFrechet(p, column, P, Q);
-                    if (segmentFrechet + p.distance <= baseQueryDelta) {
-                      choice = p;
+                const auto iter = portals.find(row);
+                if (iter != portals.cend()) {
+                  const std::vector<Portal> &ports = iter->second;
+                  choice.source = -1;
+                  for (const Portal &p : ports) {
+                    // int jumpSize = p.destination - p.source;
+                    // check if jump within range
+                    if (p.destination <= queue[first][qIndex].end_row_index) {
+                      // check if jump distance fits
+                      double segmentFrechet =
+                          computeSegmentFrechet(p, column, P, Q);
+                      if (segmentFrechet + p.distance <= baseQueryDelta) {
+                        choice = p;
+                      }
+                    } else {
+                      break;
                     }
-                  } else {
-                    break;
                   }
-                }
-                // JUMP!
-                if (choice.source != -1) {
-                  row = choice.destination - 1; // - 1 to counter ++ later
-                  queue[second][queueSize[second] - 1].end_row_index = row;
+                  // JUMP!
+                  if (choice.source != -1) {
+                    row = choice.destination - 1; // - 1 to counter ++ later
+                    queue[second][queueSize[second] - 1].end_row_index = row;
+                  }
                 }
               }
             }
