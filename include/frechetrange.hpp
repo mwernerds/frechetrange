@@ -45,8 +45,6 @@
 #include <utility> // for std::move
 #include <vector>
 
-#define ALLOW_FUNCTIONAL
-
 namespace frechetrange {
 namespace detail {
 // template meta programming
@@ -437,6 +435,15 @@ private:
       // The circle does not intersect the line through p1 and p2.
       begin = BEGIN_NOT_REACHABLE;
       return;
+    } else if (a == 0.0) {
+      // => p1 = p2
+      if (_dist2(p1, cp) <= radiusSquared) {
+        begin = 0.0;
+        end = 1.0;
+      } else {
+        begin = end = BEGIN_NOT_REACHABLE;
+      }
+      return;
     }
 
     double sqrtD = std::sqrt(discriminant);
@@ -583,6 +590,15 @@ class frechet_distance {
     distance_t c = -sqr(radius);
     add_sum_of_pairwise_diff_prods<point, get_coordinate, dimensions>::calc(
         line_start, line_end, circle_center, a, b, c);
+
+    if (a == 0.0) {
+      // => line_start = line_end
+      if (_dist2(line_start, circle_center) <= radius * radius) {
+        return {0.0, 1.0};
+      } else {
+        return empty_interval;
+      }
+    }
 
     distance_t discriminant = sqr(b / a) - c / a;
 
