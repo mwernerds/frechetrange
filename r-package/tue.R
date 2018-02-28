@@ -40,7 +40,6 @@ ds = internal_tue_create_index();
 ### Feed the data into C++
 tmp = lapply(datalist, function(x) internal_tue_add_trajectory(ds,as.matrix(x)));
 ### Now, build the index.
-meshSize = 1.0;
 internal_tue_build_index(ds);
 
 ### Now, query

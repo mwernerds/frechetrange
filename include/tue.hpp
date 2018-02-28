@@ -7,7 +7,6 @@
 #include <cmath>
 #include <limits>
 #include <map>
-#include <memory>
 #include <utility>
 #include <vector>
 
@@ -69,6 +68,13 @@ public:
     }
   }
 
+  void insert(Trajectory &&trajectory) {
+    if (trajectory.size() > 0) {
+      _extTrajectories.emplace_back(trajectory, _extTrajectories.size());
+      _srcTrajectories.emplace_back(std::move(trajectory));
+    }
+  }
+
   // Does all needed preprocessing for the given the dataset
   void build_index() {
     constructSimplifications();
@@ -100,9 +106,9 @@ public:
                                            diagonal, agarwalProg,
                                            numSimplifications);
     for (int i = 1; i < numSimplifications; i++) {
-      makeSourceSimplificationsForTrajectory(
-          *(queryTrajectory.simplifications[i]), queryTrajectory, diagonal,
-          agarwalProg, i - 1);
+      makeSourceSimplificationsForTrajectory(queryTrajectory.simplifications[i],
+                                             queryTrajectory, diagonal,
+                                             agarwalProg, i - 1);
     }
 
     CDFQShortcuts cdfqs;
@@ -205,7 +211,7 @@ private:
     BoundingBox boundingBox;
 
     std::map<int, std::vector<Portal>> simpPortals; // freespace jumps
-    std::vector<std::unique_ptr<TrajectorySimplification>> simplifications;
+    std::vector<TrajectorySimplification> simplifications;
 
     ExtTrajectory() = default;
     ExtTrajectory(ExtTrajectory &&) = default;
@@ -218,17 +224,17 @@ private:
       totals.push_back(0.0);
       sourceIndex.push_back(0);
       for (size_t i = 1; i < t.size(); ++i) {
-        const auto &v = t[i];
+        double x = get_coordinate::template get<0>(t[i]);
+        double y = get_coordinate::template get<1>(t[i]);
 
-        // ignore duplicate verts, they are annoying
+        // ignore NaN and duplicates
         const Point &prev = vertices.back();
-        if (prev.x != get_coordinate::template get<0>(v) ||
-            prev.y != get_coordinate::template get<1>(v)) {
-          addPoint(get_coordinate::template get<0>(t[i]),
-                   get_coordinate::template get<1>(t[i]));
+        if (std::isfinite(x) && std::isfinite(y) &&
+            (prev.x != x || prev.y != y)) {
+          addPoint(x, y);
           distances.push_back(dist(prev, vertices.back()));
           totals.push_back(totals.back() + distances.back());
-          sourceIndex.push_back(i);
+          sourceIndex.push_back(sourceIndex.size());
         }
       }
     }
@@ -240,8 +246,7 @@ private:
     const Point &back() const { return vertices.back(); }
 
     void addSimplification(TrajectorySimplification &&simp) {
-      simplifications.emplace_back(
-          new TrajectorySimplification(std::move(simp)));
+      simplifications.emplace_back(std::move(simp));
     }
 
   private:
@@ -532,7 +537,7 @@ private:
 
     for (int i = 0; i < size; i++) {
       int tries = 0;
-      double newUpperbound = 0;
+      double newUpperbound = 0.0;
       binaryDoubleSearch(
           [&](double value) -> int {
             newUpperbound = value;
@@ -566,7 +571,7 @@ private:
 
     // compile portals
     for (int i = 0; i < size; i++) {
-      for (Portal &p : t.simplifications[i]->portals) {
+      for (Portal &p : t.simplifications[i].portals) {
         // check if it is a useful portal
         if (p.destination - p.source != 1) {
           // check if it is not a duplicate
@@ -604,7 +609,7 @@ private:
 
     // compile portals
     for (int i = 0; i < size; i++) {
-      for (Portal &p : t.simplifications[i]->portals) {
+      for (Portal &p : t.simplifications[i].portals) {
         // check if it is a useful portal
         if (p.destination - p.source != 1) {
           // check if it is not a duplicate
@@ -678,9 +683,10 @@ private:
   // dataset
   void constructSimplifications() {
 #ifdef USE_MULTITHREAD
-    const size_t numWorkers =
-        std::thread::hardware_concurrency(); // worker threads == number of
-                                             // logical cores
+    const size_t numWorkers = std::max<size_t>(
+        1,
+        std::thread::hardware_concurrency()); // worker threads == number of
+                                              // logical cores
     std::vector<std::thread> simplificationThreads;
     std::vector<BoundingBox> bboxes(numWorkers);
 
@@ -763,16 +769,16 @@ private:
 
       double decisionEpsilonLower =
           queryDelta -
-          queryTrajectory.simplifications[i]->simplificationEpsilon -
-          t.simplifications[i]->simplificationEpsilon;
+          queryTrajectory.simplifications[i].simplificationEpsilon -
+          t.simplifications[i].simplificationEpsilon;
 
       double decisionEpsilonUpper =
           queryDelta +
-          queryTrajectory.simplifications[i]->simplificationEpsilon +
-          t.simplifications[i]->simplificationEpsilon;
+          queryTrajectory.simplifications[i].simplificationEpsilon +
+          t.simplifications[i].simplificationEpsilon;
 
-      double dist = equalTimeDistance(*t.simplifications[i],
-                                      *queryTrajectory.simplifications[i]);
+      double dist = equalTimeDistance(t.simplifications[i],
+                                      queryTrajectory.simplifications[i]);
 
       if (dist < decisionEpsilonLower) {
         returnTrajectory(t, output);
@@ -781,8 +787,8 @@ private:
       }
 
       if (decisionEpsilonLower > 0) {
-        bool r = cdfqs.calculate(*queryTrajectory.simplifications[i],
-                                 *t.simplifications[i], decisionEpsilonLower,
+        bool r = cdfqs.calculate(queryTrajectory.simplifications[i],
+                                 t.simplifications[i], decisionEpsilonLower,
                                  queryDelta);
         if (r) {
           returnTrajectory(t, output);
@@ -791,8 +797,8 @@ private:
         }
       }
       if (decisionEpsilonUpper > 0) {
-        bool r = cdfqs.calculate(*queryTrajectory.simplifications[i],
-                                 *t.simplifications[i], decisionEpsilonUpper,
+        bool r = cdfqs.calculate(queryTrajectory.simplifications[i],
+                                 t.simplifications[i], decisionEpsilonUpper,
                                  queryDelta);
         if (!r) {
           broke = true;
@@ -1068,7 +1074,7 @@ private:
     double rangeLength = upperbound - lowerbound;
     double avg = lowerbound + (rangeLength) / 2;
     int result = f(avg);
-    if (result > 0) {
+    if (result == 1) {
       binaryDoubleSearch(f, upperbound, avg);
     } else if (result == 0) {
       binaryDoubleSearch(f, avg, lowerbound);

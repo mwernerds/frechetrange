@@ -162,7 +162,7 @@ size_t internal_dv_clear(size_t handle) {
 bool internal_dv_build_index(size_t handle, double meshSize) {
   ASSERT_VALID_DATASET(g_grids, handle);
   Rcout << "Creating dv index from " << g_grids[handle].size()
-        << " trajectories.";
+        << " trajectories." << std::endl;
   g_grids[handle].build_index(meshSize);
 }
 
@@ -235,7 +235,7 @@ size_t internal_tue_add_trajectory(size_t handle, const NumericMatrix &m) {
   ASSERT_VALID_DATASET(g_tue_indices, handle);
   _trajectory_t<g_DIMENSIONS> t(m.nrow());
   _copyMatrixToTrajectory<g_DIMENSIONS>(m, t);
-  g_tue_indices[handle].insert(t);
+  g_tue_indices[handle].insert(std::move(t));
   return (g_tue_indices[handle].size() - 1);
 }
 
@@ -243,7 +243,7 @@ size_t internal_tue_add_trajectory(size_t handle, const NumericMatrix &m) {
 bool internal_tue_build_index(size_t handle) {
   ASSERT_VALID_DATASET(g_tue_indices, handle);
   Rcout << "Creating tue index from " << g_tue_indices[handle].size()
-        << " trajectories.";
+        << " trajectories." << std::endl;
   g_tue_indices[handle].build_index();
 }
 
