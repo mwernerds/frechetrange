@@ -22,40 +22,36 @@ trajectory concept is as follows:
 A trajectory can be represented as an arbitrary C++ class as long as it supports the following parts of the container concept:
 
 Given a trajectory T:
+- T is copy-constructible
 - size_t T.size(): Returns the size of the trajectory (in constant time!)
 - T[i]: Returns the i-th trajectory sample (in constant time).
 
-We plan to expect the following aspects later, but they are in fact not yet needed:
-- T is copy-constructible
-- T provides random access iterators (begin, end, etc.)
+All other aspects of the algorithm are expected to be specified as template parameters and functionals. For example,
+the Fréchet deciders require the following parameters:
 
-All other aspects of the algorithm are expected to be specified as lambda-expressions or free functions. For example,
-the Fréchet decider of Dütsch and Vahrenhold uses the following methods relating points:
-
-- A squared, fast distance functional (point, point) -> (double or similar)
-- A getter for the X coordinate (point) -> (double or similar)
-- A getter for the Y coordinate (point) -> (double or similar)
+- The number of dimensions of the points
+- A getter for each dimension's coordinate get<dim>(const point&) -> (double or similar)
+- A squared, fast distance functional (const point&, const point&) -> (double or similar)
 
 In addition to that, we currently expect that the geometry is Euclidean.
 #Example
 
-For now, only the details interfaces are available. You need to specify explicitly all aspects of your data type as for example in the
-following line from sample/bg.cpp
+For now, only the details interfaces are available. You need to at least specify the number of dimensions and the getter type of your
+point type explicitly as in the following example (compare to sample/bg.cpp):
 ```
-    frechetrange::detail::duetschvahrenhold::FrechetDistance<
-      std::function<double(point_type, point_type)>, // the squared distance signature
-      std::function<double(point_type)>, // the X getter signature
-      std::function<double(point_type)> > // the Y getter signature
+    frechetrange::detail::dv::frechet_distance<
+      2,											         	   // number of dimensions
+      get_coordinate,                                        	   // such that get_coordinate::get<dim>(p) returns p's dim-th coordinate
+      std::function<double(const point_type&, const point_type&)>> // the squared distance signature
       fd(
-	  [](point_type p1, point_type p2) {return bg::comparable_distance(p1,p2);}, // the squared distance
-	  [](point_type p){return bg::get<0>(p);},
-	  [](point_type p){return bg::get<1>(p);}
-      );
+	  [](const point_type& p, const point_type& q) {
+	    return bg::comparable_distance(p1,p2);                     // the squared distance functional
+      });
 
 ```
-As you can see, we give lambda-expressions for the three needed functionals squared_distance (comparable_distance in boost::geometry is some
+As you can see, we can give a lambda-expression for the squared distance functional (comparable_distance in boost::geometry is some
 fast implementation of a distance such that compare is correct). It is the squared distance for Euclidean geometries, but might be something
-different for other geometries. Additionally, we forward the boost::geometry getter for X and Y as the second and third constructor parameters.
+different for other geometries, in later versions.
 
 After constructing this object, it can be used quite cleanly, for example as in
 ```
@@ -64,7 +60,7 @@ After constructing this object, it can be used quite cleanly, for example as in
   while ((interval.second - interval.first) > 0.001) {
     double m = (interval.first + interval.second) / 2;
 
-    if (fd.isBoundedBy(t1, t2, m)) {
+    if (fd.is_bounded_by(t1, t2, m)) {
       interval.second = m;
     } else {
       interval.first = m;
@@ -79,4 +75,4 @@ After constructing this object, it can be used quite cleanly, for example as in
 Martin Werner - boilerplate, R-package, some integration work
 More to come.
 
-Fabian Dütsch - Grid, optimization of the Fréchet decider
+Fabian Dütsch - adapting the implementations, optimizations

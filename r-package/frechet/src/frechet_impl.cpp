@@ -2,7 +2,9 @@
 // [[Rcpp::plugins(cpp11)]]
 
 #include <array>
-#include <functional>
+#include <stdexcept> // for std::runtime_error
+#include <utility>   // for std::move
+#include <vector>
 
 //#define ENABLE_MULTITHREADING
 #include "../../../include/frechetrange/frechetrange.hpp"

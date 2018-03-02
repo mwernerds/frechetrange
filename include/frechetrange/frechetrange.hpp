@@ -28,7 +28,7 @@
 *                 class spatial_index
 *
 *             bddm      contains implementations by Buchin, Diez, Diggelen, and
-* Meulemans
+*                       Meulemans
 *                 class spatial_hash
 *
 *             dv        contains implementations by Dütsch and Vahrenhold
