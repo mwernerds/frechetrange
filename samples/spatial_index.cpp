@@ -7,7 +7,7 @@ minimalistic, dependency-free C++ / STL project.
 #include <utility>
 #include <vector>
 
-#include "../include/frechetrange.hpp"
+#include "../include/frechetrange/frechetrange.hpp"
 
 using std::cout;
 using std::endl;
@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
   trajectory q2 = {{1, 1}, {2, 2}, {1, 3}};
   const double distThreshold2 = 2.0;
 
-  frechetrange::detail::baldusbringmann::spatial_index<
+  frechetrange::detail::bb::spatial_index<
       2, trajectory, get_coordinate,
       frechetrange::euclidean_distance_sqr<2, get_coordinate>>
       spatial_index;

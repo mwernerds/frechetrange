@@ -48,7 +48,7 @@ print(sprintf("Range query found %d",length(result)));
 
 
 ### And visualize (query is red and thick, dataset is gray, found is black and small)
-png("tue.png")
+png("bddm.png")
 plot(sanfrancisco,t="l", col="gray");
 lines(datalist[[queryIndex]],col="red", lwd=5)
 lapply(result, function(x) lines(x,col="black"))

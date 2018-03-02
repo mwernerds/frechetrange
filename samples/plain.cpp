@@ -10,7 +10,7 @@ C++ / STL project.
 #include <utility>
 #include <vector>
 
-#include "../include/frechetrange.hpp"
+#include "../include/frechetrange/frechetrange.hpp"
 
 using std::cout;
 using std::endl;
@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
   trajectory t2 = {
       {0, 1}, {5, 10}, {10, 1}}; // triangle above. Tip is 10 higher.
   // true Frechet: 10
-  frechetrange::detail::duetschvahrenhold::frechet_distance<
+  frechetrange::detail::dv::frechet_distance<
       2, get_coordinate,
       frechetrange::euclidean_distance_sqr<2, get_coordinate>>
       fd;
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
   }
 
   // now bringmann baldus test code.
-  frechetrange::detail::baldusbringmann::frechet_distance<
+  frechetrange::detail::bb::frechet_distance<
       2, get_coordinate,
       frechetrange::euclidean_distance_sqr<2, get_coordinate>>
       fd2;

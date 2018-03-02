@@ -16,7 +16,7 @@ two versions are given:
 #include <boost/geometry/geometries/geometries.hpp>
 #include <boost/geometry/geometries/linestring.hpp>
 
-#include "../include/frechetrange.hpp"
+#include "../include/frechetrange/frechetrange.hpp"
 
 using std::cout;
 using std::endl;
@@ -47,8 +47,8 @@ int main(int argc, char **argv) {
   bg::read_wkt("LINESTRING(1 1, 2 2, 1 3)", t2);
 
   // instantiate some decider, this time fully specified.
-  frechetrange::detail::duetschvahrenhold::frechet_distance<2, get_coordinate,
-                                                            squared_distance>
+  frechetrange::detail::dv::frechet_distance<2, get_coordinate,
+                                             squared_distance>
       fd;
 
   cout << std::fixed;
@@ -75,8 +75,8 @@ int main(int argc, char **argv) {
 
   // Bringmann Baldus Case
 
-  frechetrange::detail::baldusbringmann::frechet_distance<2, get_coordinate,
-                                                          squared_distance>
+  frechetrange::detail::bb::frechet_distance<2, get_coordinate,
+                                             squared_distance>
       fd2;
 
   cout << std::fixed;

@@ -1,5 +1,25 @@
-#ifndef DUETSCH_VAHRENHOLD_GRID_INC
-#define DUETSCH_VAHRENHOLD_GRID_INC
+#ifndef DV_GRID_HPP
+#define DV_GRID_HPP
+
+#include <algorithm> // for std::sort, std::lower_bound, std::upper_bound, and std::max
+#include <array>
+#include <cmath>      // for std::floor
+#include <functional> // for std::hash
+#include <stdexcept>  // for std::invalid_argument
+#include <unordered_map>
+#include <utility> // for std::move
+#include <vector>
+
+#ifdef ENABLE_MULTITHREADING
+#include <deque>
+#include <future> // for std::async
+#endif
+
+#include "frechet_distance.hpp"
+
+namespace frechetrange {
+namespace detail {
+namespace dv {
 
 /**
 * A grid of fixed mesh size spanning the Euclidean plane.
@@ -680,5 +700,9 @@ private:
     return expectedRatioElemsToSkip * bucketSize >= MIN_BINARY_SEARCH_SIZE;
   }
 };
+
+} // namespace dv
+} // namespace detail
+} // namespace frechetrange
 
 #endif

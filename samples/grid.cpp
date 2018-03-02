@@ -7,7 +7,7 @@ minimalistic, dependency-free C++ / STL project.
 #include <utility>
 #include <vector>
 
-#include "../include/frechetrange.hpp"
+#include "../include/frechetrange/frechetrange.hpp"
 
 using std::cout;
 using std::endl;
@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
   const double distThreshold2 = 2.0;
 
   double meshSize = std::max(distThreshold1, distThreshold2);
-  frechetrange::detail::duetschvahrenhold::grid<
+  frechetrange::detail::dv::grid<
       2, trajectory, get_coordinate,
       frechetrange::euclidean_distance_sqr<2, get_coordinate>>
       grid(meshSize);

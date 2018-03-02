@@ -7,10 +7,10 @@ all:
 	$(CXX) -o bg bg.cpp $(CXXFLAGS)
 	$(CXX) -o grid grid.cpp $(CXXFLAGS) $(MULTITHREADED)
 	$(CXX) -o spatial_index spatial_index.cpp $(CXXFLAGS)
-	$(CXX) -o tue tue.cpp $(CXXFLAGS) -Wno-sign-compare $(MULTITHREADED)
+	$(CXX) -o spatial_hash spatial_hash.cpp $(CXXFLAGS) -Wno-sign-compare $(MULTITHREADED)
 
 clean:
-	rm -f plain bg grid spatial_index tue
+	rm -f plain bg grid spatial_index spatial_hash
 
 format:
-	clang-format -i *.cpp ../include/*.hpp
+	clang-format -i *.cpp ../include/frechetrange/*.hpp ../include/frechetrange/detail/bb/*.hpp ../include/frechetrange/detail/bddm/*.hpp ../include/frechetrange/detail/dv/*.hpp

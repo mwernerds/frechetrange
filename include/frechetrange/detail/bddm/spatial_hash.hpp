@@ -1,11 +1,13 @@
-#ifndef TUE_INC
-#define TUE_INC
+#ifndef BDDM_SPATIAL_HASH_HPP
+#define BDDM_SPATIAL_HASH_HPP
 
-#include <algorithm>
-#include <cmath>
+#include <algorithm>  // for std::max and std::min
+#include <cmath>      // for std::sqrt and std::isfinite
+#include <cstddef>    // for std::size_t
+#include <functional> // for std::function
 #include <limits>
 #include <map>
-#include <utility>
+#include <utility> // for std::move
 #include <vector>
 
 #ifdef ENABLE_MULTITHREADING
@@ -14,7 +16,8 @@
 
 namespace frechetrange {
 namespace detail {
-namespace tue {
+namespace bddm {
+
 /*
     This is the collected and reordered (but not redactionally completed)
 implementation of
@@ -1243,7 +1246,9 @@ private:
     }
   };
 };
-} // namespace tue
-}
-}
+
+} // namespace bddm
+} // namespace detail
+} // namespace frechetrange
+
 #endif // TUE_INC
