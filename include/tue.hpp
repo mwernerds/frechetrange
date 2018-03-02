@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#ifdef USE_MULTITHREAD
+#ifdef ENABLE_MULTITHREADING
 #include <thread>
 #endif
 
@@ -652,7 +652,7 @@ private:
   // Preprocessing step. Calculates simplifications for all trajectories in the
   // dataset
   void constructSimplifications() {
-#ifdef USE_MULTITHREAD
+#ifdef ENABLE_MULTITHREADING
     const size_t numWorkers =
         std::thread::hardware_concurrency(); // worker threads == number of
                                              // logical cores

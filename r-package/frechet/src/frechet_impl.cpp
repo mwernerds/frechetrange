@@ -4,8 +4,8 @@
 #include <array>
 #include <functional>
 
+//#define ENABLE_MULTITHREADING
 #include "../../../include/frechetrange.hpp"
-//#define USE_MULTITHREAD
 #include "../../../include/tue.hpp"
 
 using Rcpp::NumericMatrix;

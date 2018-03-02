@@ -45,6 +45,11 @@
 #include <utility> // for std::move
 #include <vector>
 
+#ifdef ENABLE_MULTITHREADING
+#include <deque>
+#include <future> // for std::async
+#endif
+
 namespace frechetrange {
 namespace detail {
 // template meta programming
@@ -123,6 +128,7 @@ public:
   /**
   * Returns whether the Fréchet distance of the passed trajectories is bounded
   * by the passed upper bound.
+  * Not thread-safe.
   * @pre Neither of the trajectories is empty.
   */
   template <typename Trajectory>
@@ -511,7 +517,7 @@ namespace baldusbringmann {
 
 typedef double distance_t;
 
-template <typename valtype> valtype sqr(valtype a) { return a * a; };
+template <typename valtype> valtype sqr(valtype a) { return a * a; }
 
 /*
  * Represents a trajectory. Additionally to the points given in the input file,
