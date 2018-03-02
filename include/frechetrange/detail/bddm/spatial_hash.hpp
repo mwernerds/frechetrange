@@ -831,9 +831,9 @@ private:
 
   public:
     int numRows = 0;
-    bool calculate(const Vertices &P, const Vertices &Q, int offset_p,
-                   int offset_q, int size_p, int size_q, double queryDelta,
-                   double baseQueryDelta,
+    bool calculate(const Vertices &P, const Vertices &Q, size_t offset_p,
+                   size_t offset_q, size_t size_p, size_t size_q,
+                   double queryDelta, double baseQueryDelta,
                    const std::map<int, std::vector<Portal>> &portals) {
       double startDist = dist2(P[offset_p], Q[offset_q]);
       double endDist = dist2(P[size_p - 1], Q[size_q - 1]);
@@ -873,7 +873,8 @@ private:
       queueSize[second] = 0;
 
       // For each column
-      for (int column = offset_q; column < size_q - 1; column++) {
+      for (int column = offset_q; column < static_cast<int>(size_q) - 1;
+           column++) {
         if (queueSize[first] == 0) {
           // nothing reachable anymore
           return false;
@@ -995,7 +996,7 @@ private:
             // propagated reachability by one cell, so look at next row
             row++;
             numRows++;
-          } while (left_most_top <= 1 && row < size_p - 1);
+          } while (left_most_top <= 1 && row < static_cast<int>(size_p) - 1);
         }
 
         // swap first and second column
@@ -1007,24 +1008,25 @@ private:
       int endIndex = queueSize[first] - 1;
       if (endIndex == -1)
         return false;
-      bool exit = queue[first][endIndex].start_row_index == size_p - 2 &&
+      bool exit = queue[first][endIndex].start_row_index ==
+                      static_cast<int>(size_p) - 2 &&
                   queue[first][endIndex].lowest_right <= 1;
-      return exit || (queue[first][endIndex].end_row_index == size_p - 2 &&
-                      queue[first][endIndex].start_row_index != size_p - 2);
+      return exit || (queue[first][endIndex].end_row_index ==
+                          static_cast<int>(size_p) - 2 &&
+                      queue[first][endIndex].start_row_index !=
+                          static_cast<int>(size_p) - 2);
     }
 
     bool calculate(const ExtTrajectory &P, const ExtTrajectory &Q,
                    double queryDelta, double baseQueryDelta) {
-      return calculate(P.vertices, Q.vertices, 0, 0, static_cast<int>(P.size()),
-                       static_cast<int>(Q.size()), queryDelta, baseQueryDelta,
-                       P.simpPortals);
+      return calculate(P.vertices, Q.vertices, 0, 0, P.size(), Q.size(),
+                       queryDelta, baseQueryDelta, P.simpPortals);
     }
 
     bool calculate(const ExtTrajectory &P, const ExtTrajectory &Q,
                    double queryDelta) {
-      return calculate(P.vertices, Q.vertices, 0, 0, static_cast<int>(P.size()),
-                       static_cast<int>(Q.size()), queryDelta, queryDelta,
-                       P.simpPortals);
+      return calculate(P.vertices, Q.vertices, 0, 0, P.size(), Q.size(),
+                       queryDelta, queryDelta, P.simpPortals);
     }
   };
 
@@ -1119,7 +1121,7 @@ private:
             simplificationEpsilon);
         simpSize++;
         simplified.vertices[simpSize - 1] = P[k];
-        if (k == t.size() - 1) {
+        if (k == static_cast<int>(t.size()) - 1) {
           break;
         }
         prevk = k;
@@ -1191,7 +1193,7 @@ private:
         simpSize++;
         simplified.vertices[simpSize - 1] = P[k];
         simplified.sourceIndex.push_back(parent.sourceIndex[k]);
-        if (k == parent.size() - 1) {
+        if (k == static_cast<int>(parent.size()) - 1) {
           break;
         }
         prevk = k;
@@ -1225,7 +1227,7 @@ private:
                 simptotals[simpSize - 1] + simpdists[simpSize];
             size_t end = 0;
             size_t start = parentSourceIndices[prevk];
-            if (index + 1 >= parentSourceIndices.size()) {
+            if (static_cast<size_t>(index + 1) >= parentSourceIndices.size()) {
               end = sourceTrajectory.size();
             } else {
               end = parentSourceIndices[index + 1];

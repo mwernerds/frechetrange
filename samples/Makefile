@@ -7,7 +7,7 @@ all:
 	$(CXX) -o bg bg.cpp $(CXXFLAGS)
 	$(CXX) -o grid grid.cpp $(CXXFLAGS) $(MULTITHREADED)
 	$(CXX) -o spatial_index spatial_index.cpp $(CXXFLAGS)
-	$(CXX) -o spatial_hash spatial_hash.cpp $(CXXFLAGS) -Wno-sign-compare $(MULTITHREADED)
+	$(CXX) -o spatial_hash spatial_hash.cpp $(CXXFLAGS) $(MULTITHREADED)
 
 clean:
 	rm -f plain bg grid spatial_index spatial_hash
