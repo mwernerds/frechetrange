@@ -1,7 +1,19 @@
-#ifndef BALDUS_BRINGMANN_SPATIAL_INDEX_INC
-#define BALDUS_BRINGMANN_SPATIAL_INDEX_INC
+#ifndef BB_SPATIAL_INDEX_HPP
+#define BB_SPATIAL_INDEX_HPP
 
-// TODO: multithreading
+#include <algorithm> // for std::max and std::min
+#include <array>
+#include <cmath>   // for std::sqrt and std::abs
+#include <memory>  // for std::unique_ptr
+#include <utility> // for std::pair
+#include <vector>
+
+#include "frechet_distance.hpp"
+
+namespace frechetrange {
+namespace detail {
+namespace bb {
+
 // TODO: multidimensional
 // A point in the n-dimensional space
 template <size_t dimensions>
@@ -318,5 +330,9 @@ private:
     return false;
   }
 };
+
+} // namespace bb
+} // namespace detail
+} // namespace frechetrange
 
 #endif

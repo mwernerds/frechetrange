@@ -1,5 +1,25 @@
-#ifndef DUETSCH_VAHRENHOLD_GRID_INC
-#define DUETSCH_VAHRENHOLD_GRID_INC
+#ifndef DV_GRID_HPP
+#define DV_GRID_HPP
+
+#include <algorithm> // for std::sort, std::lower_bound, std::upper_bound, and std::max
+#include <array>
+#include <cmath>      // for std::floor
+#include <functional> // for std::hash
+#include <stdexcept>  // for std::invalid_argument
+#include <unordered_map>
+#include <utility> // for std::move
+#include <vector>
+
+#ifdef ENABLE_MULTITHREADING
+#include <deque>
+#include <future> // for std::async
+#endif
+
+#include "frechet_distance.hpp"
+
+namespace frechetrange {
+namespace detail {
+namespace dv {
 
 /**
 * A grid of fixed mesh size spanning the Euclidean plane.
@@ -18,8 +38,8 @@ public:
   */
   grid(double meshSize, const squared_distance &dist2 = squared_distance())
       : _meshSize(meshSize), _maps(), _expectedQueryCost{{0, 0, 0, 0}},
-        _useLeftBorder(), _useBottomBorder(), _optimized(false),
-        _frechetDistance(dist2) {}
+        _useLeftBorder(), _useBottomBorder(), _optimized(false), _dist2(dist2) {
+  }
   grid(const grid &) = default;
   grid(grid &&) = default;
   grid &operator=(const grid &) = default;
@@ -57,7 +77,6 @@ public:
   * to achieve better query times.
   */
   void build_index() {
-    // TODO: multithreading
     if (_optimized)
       return;
 
@@ -226,6 +245,7 @@ private:
       else
         std::sort(bucket.begin(), bucket.end(), MBRComparator<false, bottom>());
     }
+
     template <bool left, bool bottom> bool chooseSortingOrder() {
       // find extremal MBR corner coordinates
       double minX = bucket[0].template getBorder<true, left>();
@@ -263,6 +283,9 @@ private:
       return hash;
     }
   };
+
+  using frechet_decider =
+      frechet_distance<dimensions, get_coordinate, squared_distance>;
 
   /**
   * Minimal number of containing trajectories for a cell to be sorted.
@@ -316,8 +339,7 @@ private:
   */
   bool _optimized;
 
-  mutable frechet_distance<dimensions, get_coordinate, squared_distance>
-      _frechetDistance;
+  squared_distance _dist2;
 
   long long toCellNr(double pointCoord) const {
     return static_cast<long long>(std::floor(pointCoord / _meshSize));
@@ -398,16 +420,31 @@ private:
   }
 
   template <bool left, bool bottom> void sortCells() {
+#ifdef ENABLE_MULTITHREADING
+    constexpr size_t MAX_NUM_THREADS = 64;
+    std::deque<std::future<void>> threads;
+#endif
+
     for (auto &iter : _maps[toMapIndex(left, bottom)]) {
       Cell &cell = iter.second;
-      if (cell.bucket.size() >= MIN_SORT_SIZE)
+      if (cell.bucket.size() >= MIN_SORT_SIZE) {
+#ifdef ENABLE_MULTITHREADING
+        threads.push_back(std::async(
+            std::launch::async, &Cell::template sort<left, bottom>, &cell));
+        if (threads.size() >= MAX_NUM_THREADS) {
+          threads.pop_front();
+        }
+#else
         cell.template sort<left, bottom>();
+#endif
+      }
     }
   }
 
   template <bool left, bool bottom, typename Output>
   void query(const Trajectory &query, double threshold, Output &output) const {
     MBR queryMBR(query);
+
     // check which horizontal neighbor cells need to be visited
     double cellCoordX = toCellCoord(queryMBR.template getBorder<true, left>());
     bool visitLeft =
@@ -435,36 +472,40 @@ private:
     CellNr cellNr{toCellNr(queryMBR.template getBorder<true, left>()),
                   toCellNr(queryMBR.template getBorder<false, bottom>())};
 
+    frechet_decider fd(_dist2);
+
     // visit the center cell
     checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                    crossedVerticals, crossedHorizontals,
+                                    crossedVerticals, crossedHorizontals, fd,
                                     output);
     // visit the bottom cell
     --cellNr.y;
     if (visitBottom)
       checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                      crossedVerticals, CROSSES_END, output);
+                                      crossedVerticals, CROSSES_END, fd,
+                                      output);
     // visit the top cell
     cellNr.y += 2;
     if (visitTop)
       checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                      crossedVerticals, CROSSES_BEGIN, output);
+                                      crossedVerticals, CROSSES_BEGIN, fd,
+                                      output);
 
     --cellNr.x;
     if (visitLeft) {
       // visit the top-left cell
       if (visitTop)
         checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_END, CROSSES_BEGIN, output);
+                                        CROSSES_END, CROSSES_BEGIN, fd, output);
       // visit the left cell
       --cellNr.y;
       checkCell<left, bottom, Output>(cellNr, queryMBR, threshold, CROSSES_END,
-                                      crossedHorizontals, output);
+                                      crossedHorizontals, fd, output);
       // visit the bottom-left cell
       --cellNr.y;
       if (visitBottom)
         checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_END, CROSSES_END, output);
+                                        CROSSES_END, CROSSES_END, fd, output);
       cellNr.y += 2;
     }
 
@@ -473,24 +514,25 @@ private:
       // visit the top-right cell
       if (visitTop)
         checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_BEGIN, CROSSES_BEGIN, output);
+                                        CROSSES_BEGIN, CROSSES_BEGIN, fd,
+                                        output);
       // visit the right cell
       --cellNr.y;
       checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                      CROSSES_BEGIN, crossedHorizontals,
+                                      CROSSES_BEGIN, crossedHorizontals, fd,
                                       output);
       // visit the bottom-right cell
       --cellNr.y;
       if (visitBottom)
         checkCell<left, bottom, Output>(cellNr, queryMBR, threshold,
-                                        CROSSES_BEGIN, CROSSES_END, output);
+                                        CROSSES_BEGIN, CROSSES_END, fd, output);
     }
   }
 
   template <bool left, bool bottom, typename Output>
   void checkCell(const CellNr &cellNr, const MBR &queryMBR, double threshold,
                  Crossings crossedVerticals, Crossings crossedHorizontals,
-                 Output &output) const {
+                 frechet_decider &fd, Output &output) const {
     const Map &map = _maps[toMapIndex(left, bottom)];
     // ensure that the cell containts some trajectories
     typename Map::const_iterator iter = map.find(cellNr);
@@ -501,23 +543,23 @@ private:
     // traverse the contained trajectories according to the sorting order
     if (cell.xSorted) {
       this->template traverseBucket<true, left, Output>(
-          cell.bucket, queryMBR, threshold, crossedVerticals, output);
+          cell.bucket, queryMBR, threshold, crossedVerticals, fd, output);
     } else {
       this->template traverseBucket<false, bottom, Output>(
-          cell.bucket, queryMBR, threshold, crossedHorizontals, output);
+          cell.bucket, queryMBR, threshold, crossedHorizontals, fd, output);
     }
   }
 
   template <bool xDim, bool firstBorder, typename Output>
   void traverseBucket(const typename Cell::Bucket &bucket, const MBR &queryMBR,
                       double threshold, Crossings crossedBorders,
-                      Output &output) const {
+                      frechet_decider &fd, Output &output) const {
     if (bucket.size() < MIN_SORT_SIZE || !_optimized) {
       // check each trajectory of this cell,
       // as they are not sorted
       for (const MBR &trajectory : bucket) {
         checkTrajectory<false, false, false>(queryMBR, threshold, trajectory,
-                                             output);
+                                             fd, output);
       }
     } else { // the trajectories are sorted
       // choose the traversing order and beginning depending on
@@ -532,7 +574,7 @@ private:
              activeRangeBegin;
              --i) {
           checkTrajectory<true, xDim, firstBorder>(queryMBR, threshold,
-                                                   bucket[i], output);
+                                                   bucket[i], fd, output);
 
           if (i == 0) {
             break;
@@ -577,7 +619,7 @@ private:
                searchBegin->template getBorder<xDim, firstBorder>() <=
                    activeRangeEnd) {
           checkTrajectory<true, xDim, firstBorder>(queryMBR, threshold,
-                                                   *searchBegin, output);
+                                                   *searchBegin, fd, output);
           ++searchBegin;
         }
       }
@@ -587,7 +629,8 @@ private:
   template <bool prechecked, bool xDim, bool firstBorder,
             typename OutputFunctional>
   void checkTrajectory(const MBR &queryMBR, double threshold,
-                       const MBR &trajMBR, OutputFunctional &output) const {
+                       const MBR &trajMBR, frechet_decider &frechetDistance,
+                       OutputFunctional &output) const {
     // ensure that all bounding box borders are within range
     if (mbrsWithinRange<prechecked, xDim, firstBorder>(queryMBR, threshold,
                                                        trajMBR)) {
@@ -595,7 +638,7 @@ private:
       // if it is within Fréchet distance of the query trajectory
       if (squaredfarthestBBDistance(queryMBR, trajMBR) <=
               threshold * threshold ||
-          _frechetDistance.template is_bounded_by<Trajectory>(
+          frechetDistance.template is_bounded_by<Trajectory>(
               queryMBR.trajectory, trajMBR.trajectory, threshold)) {
         const Trajectory &result = trajMBR.trajectory;
         output(result);
@@ -657,5 +700,9 @@ private:
     return expectedRatioElemsToSkip * bucketSize >= MIN_BINARY_SEARCH_SIZE;
   }
 };
+
+} // namespace dv
+} // namespace detail
+} // namespace frechetrange
 
 #endif

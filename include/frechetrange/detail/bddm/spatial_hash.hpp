@@ -1,22 +1,23 @@
-#ifndef TUE_INC
-#define TUE_INC
+#ifndef BDDM_SPATIAL_HASH_HPP
+#define BDDM_SPATIAL_HASH_HPP
 
-#include <algorithm>
-#include <cmath>
+#include <algorithm>  // for std::max and std::min
+#include <cmath>      // for std::sqrt and std::isfinite
+#include <cstddef>    // for std::size_t
+#include <functional> // for std::function
 #include <limits>
 #include <map>
-#include <memory>
-#include <utility>
+#include <utility> // for std::move
 #include <vector>
 
-#ifdef USE_MULTITHREAD
-#include <mutex>
+#ifdef ENABLE_MULTITHREADING
 #include <thread>
 #endif
 
 namespace frechetrange {
 namespace detail {
-namespace tue {
+namespace bddm {
+
 /*
     This is the collected and reordered (but not redactionally completed)
 implementation of
@@ -49,14 +50,8 @@ class spatial_hash {
 public:
   spatial_hash()
       : _srcTrajectories(), _extTrajectories(), _boundingBox(),
-        _diHash(slotsPerDimension, tolerance), _count(0), _avgsBBRatio {
-    0.0, 0.0, 0.0, 0.0
-  }
-#ifdef USE_MULTITHREAD
-  , _simplificationMTX(), _startedSimplifying()
-#endif
-  {
-  }
+        _diHash(SLOTS_PER_DIMENSION, TOLERANCE), _count(0),
+        _avgsBBRatio{0.0, 0.0, 0.0, 0.0} {}
 
   size_t size() const { return _srcTrajectories.size(); }
 
@@ -64,6 +59,13 @@ public:
     if (trajectory.size() > 0) {
       _srcTrajectories.push_back(trajectory);
       _extTrajectories.emplace_back(trajectory, _extTrajectories.size());
+    }
+  }
+
+  void insert(Trajectory &&trajectory) {
+    if (trajectory.size() > 0) {
+      _extTrajectories.emplace_back(trajectory, _extTrajectories.size());
+      _srcTrajectories.emplace_back(std::move(trajectory));
     }
   }
 
@@ -96,11 +98,11 @@ public:
     double diagonal = queryTrajectory.boundingBox.getDiagonal();
     makeSourceSimplificationsForTrajectory(queryTrajectory, queryTrajectory,
                                            diagonal, agarwalProg,
-                                           numSimplifications);
-    for (int i = 1; i < numSimplifications; i++) {
-      makeSourceSimplificationsForTrajectory(
-          *(queryTrajectory.simplifications[i]), queryTrajectory, diagonal,
-          agarwalProg, i - 1);
+                                           NUM_SIMPLIFICATIONS);
+    for (int i = 1; i < NUM_SIMPLIFICATIONS; i++) {
+      makeSourceSimplificationsForTrajectory(queryTrajectory.simplifications[i],
+                                             queryTrajectory, diagonal,
+                                             agarwalProg, i - 1);
     }
 
     CDFQShortcuts cdfqs;
@@ -122,11 +124,9 @@ public:
   }
 
 private:
-  static constexpr int numSimplifications = 4;
-  // Number of queries allocated to a worker as one 'job'
-  static constexpr int simplificationBatchSize = 20;
-  static constexpr int slotsPerDimension = 500;
-  static constexpr double tolerance = 0.00001;
+  static constexpr int NUM_SIMPLIFICATIONS = 4;
+  static constexpr int SLOTS_PER_DIMENSION = 500;
+  static constexpr double TOLERANCE = 0.00001;
 
   std::vector<Trajectory> _srcTrajectories;
   std::vector<ExtTrajectory> _extTrajectories;
@@ -135,12 +135,6 @@ private:
 
   int _count;
   double _avgsBBRatio[4];
-
-#ifdef USE_MULTITHREAD
-  // Mutex guarding access to the queryset from the worker threads
-  std::mutex _simplificationMTX;
-  volatile int _startedSimplifying;
-#endif
 
   /* DATA STRUCTURES */
 
@@ -203,7 +197,7 @@ private:
     BoundingBox boundingBox;
 
     std::map<int, std::vector<Portal>> simpPortals; // freespace jumps
-    std::vector<std::unique_ptr<TrajectorySimplification>> simplifications;
+    std::vector<TrajectorySimplification> simplifications;
 
     ExtTrajectory() = default;
     ExtTrajectory(ExtTrajectory &&) = default;
@@ -216,17 +210,17 @@ private:
       totals.push_back(0.0);
       sourceIndex.push_back(0);
       for (size_t i = 1; i < t.size(); ++i) {
-        const auto &v = t[i];
+        double x = get_coordinate::template get<0>(t[i]);
+        double y = get_coordinate::template get<1>(t[i]);
 
-        // ignore duplicate verts, they are annoying
+        // ignore NaN and duplicates
         const Point &prev = vertices.back();
-        if (prev.x != get_coordinate::template get<0>(v) ||
-            prev.y != get_coordinate::template get<1>(v)) {
-          addPoint(get_coordinate::template get<0>(t[i]),
-                   get_coordinate::template get<1>(t[i]));
+        if (std::isfinite(x) && std::isfinite(y) &&
+            (prev.x != x || prev.y != y)) {
+          addPoint(x, y);
           distances.push_back(dist(prev, vertices.back()));
           totals.push_back(totals.back() + distances.back());
-          sourceIndex.push_back(i);
+          sourceIndex.push_back(sourceIndex.size());
         }
       }
     }
@@ -238,8 +232,7 @@ private:
     const Point &back() const { return vertices.back(); }
 
     void addSimplification(TrajectorySimplification &&simp) {
-      simplifications.emplace_back(
-          new TrajectorySimplification(std::move(simp)));
+      simplifications.emplace_back(std::move(simp));
     }
 
   private:
@@ -344,8 +337,8 @@ private:
   }
 
   struct Range {
-    double start;
-    double end;
+    double start = 0.0;
+    double end = 0.0;
 
     bool isComplete() const { return start == 0.0 && end == 1.0; }
   };
@@ -482,7 +475,7 @@ private:
         min = _limits[0][0];
         max = _limits[0][1];
         break;
-      case 'y':
+      default: // case 'y':
         min = _limits[1][0];
         max = _limits[1][1];
         break;
@@ -530,7 +523,7 @@ private:
 
     for (int i = 0; i < size; i++) {
       int tries = 0;
-      double newUpperbound = 0;
+      double newUpperbound = 0.0;
       binaryDoubleSearch(
           [&](double value) -> int {
             newUpperbound = value;
@@ -564,7 +557,7 @@ private:
 
     // compile portals
     for (int i = 0; i < size; i++) {
-      for (Portal &p : t.simplifications[i]->portals) {
+      for (Portal &p : t.simplifications[i].portals) {
         // check if it is a useful portal
         if (p.destination - p.source != 1) {
           // check if it is not a duplicate
@@ -602,7 +595,7 @@ private:
 
     // compile portals
     for (int i = 0; i < size; i++) {
-      for (Portal &p : t.simplifications[i]->portals) {
+      for (Portal &p : t.simplifications[i].portals) {
         // check if it is a useful portal
         if (p.destination - p.source != 1) {
           // check if it is not a duplicate
@@ -653,82 +646,61 @@ private:
     }
   }
 
-  void simplifyTrajectory(size_t tIndex, AgarwalSimplification &agarwal,
-                          BoundingBox &bbox) {
-    ExtTrajectory &t = _extTrajectories[tIndex];
-
-    if (t.size() > 1) {
-      bbox.addPoint(t.boundingBox.minx, t.boundingBox.miny);
-      bbox.addPoint(t.boundingBox.maxx, t.boundingBox.maxy);
-      makeSimplificationsForTrajectory(t, agarwal);
-    }
-  }
-
   void makeSimplificationsForTrajectory(ExtTrajectory &t,
                                         AgarwalSimplification &agarwal) {
     makeSimplificationsForTrajectory(t, t.boundingBox.getDiagonal(), agarwal,
-                                     numSimplifications);
+                                     NUM_SIMPLIFICATIONS);
   }
-
-  // SENSIBILITY CHECKED MARKER
 
   // Preprocessing step. Calculates simplifications for all trajectories in the
   // dataset
   void constructSimplifications() {
-#ifdef USE_MULTITHREAD
+#ifdef ENABLE_MULTITHREADING
     const size_t numWorkers =
         std::thread::hardware_concurrency(); // worker threads == number of
                                              // logical cores
-    std::vector<std::thread> simplificationThreads;
-    std::vector<BoundingBox> bboxes(numWorkers);
+    if (numWorkers > 1 && _extTrajectories.size() >= 100) {
+      // use multiple threads
+      std::vector<std::thread> simplificationThreads;
+      std::vector<BoundingBox> bboxes(numWorkers);
 
-    _startedSimplifying = 0;
-    for (size_t i = 0; i < numWorkers; i++) {
-      simplificationThreads.emplace_back(&spatial_hash::simplificationWorker,
-                                         this, &(bboxes[i]));
-    }
-    for (size_t i = 0; i < numWorkers; i++) {
-      simplificationThreads[i].join();
-      _boundingBox.addPoint(bboxes[i].minx, bboxes[i].miny);
-      _boundingBox.addPoint(bboxes[i].maxx, bboxes[i].maxy);
-    }
-#else
-    AgarwalSimplification agarwal;
-    for (size_t tIdx = 0; tIdx < _extTrajectories.size(); ++tIdx) {
-      simplifyTrajectory(tIdx, agarwal, _boundingBox);
+      // start threads
+      const size_t trajsPerThread = _extTrajectories.size() / numWorkers;
+      for (size_t i = 0; i < numWorkers - 1; i++) {
+        simplificationThreads.emplace_back(
+            &spatial_hash::simplificationWorker, this, i * trajsPerThread,
+            (i + 1) * trajsPerThread, &(bboxes[i]));
+      }
+      simplificationThreads.emplace_back(
+          &spatial_hash::simplificationWorker, this,
+          (numWorkers - 1) * trajsPerThread, _extTrajectories.size(),
+          &(bboxes[numWorkers - 1]));
+
+      // join threads
+      for (size_t i = 0; i < numWorkers; ++i) {
+        simplificationThreads[i].join();
+        _boundingBox.addPoint(bboxes[i].minx, bboxes[i].miny);
+        _boundingBox.addPoint(bboxes[i].maxx, bboxes[i].maxy);
+      }
+      return;
     }
 #endif
+
+    // otherwise, use single thread
+    simplificationWorker(0, _extTrajectories.size(), &_boundingBox);
   }
 
-#ifdef USE_MULTITHREAD
-  void simplificationWorker(BoundingBox *bbox) {
+  void simplificationWorker(size_t startIdx, size_t endIdx, BoundingBox *bbox) {
     AgarwalSimplification agarwal;
-    int current = getConcurrentTrajectory();
-    while (current != -1) {
-      int limit = simplificationBatchSize;
-      if (current + simplificationBatchSize > _extTrajectories.size()) {
-        limit = _extTrajectories.size() - current;
+    for (size_t i = startIdx; i < endIdx; ++i) {
+      ExtTrajectory &t = _extTrajectories[i];
+      if (t.size() > 1) {
+        bbox->addPoint(t.boundingBox.minx, t.boundingBox.miny);
+        bbox->addPoint(t.boundingBox.maxx, t.boundingBox.maxy);
+        makeSimplificationsForTrajectory(t, agarwal);
       }
-      for (size_t step = 0; step < limit; step++) {
-        simplifyTrajectory(current + step, agarwal, *bbox);
-      }
-      current = getConcurrentTrajectory();
     }
   }
-
-  // Returns a query index for a worker to solve, locking the query set
-  int getConcurrentTrajectory() {
-    _simplificationMTX.lock();
-    if (_startedSimplifying >= _extTrajectories.size()) {
-      _simplificationMTX.unlock();
-      return -1;
-    }
-    int returnTrajectory = _startedSimplifying;
-    _startedSimplifying += simplificationBatchSize;
-    _simplificationMTX.unlock();
-    return returnTrajectory;
-  }
-#endif
 
   /*
           PRUNING STRATEGIES
@@ -757,20 +729,19 @@ private:
       const std::function<void(const ExtTrajectory &)> &maybe,
       OutputFunctional &output) {
     bool broke = false;
-    for (int i = 0; i < numSimplifications; i++) {
-
+    for (int i = 0; i < NUM_SIMPLIFICATIONS; ++i) {
       double decisionEpsilonLower =
           queryDelta -
-          queryTrajectory.simplifications[i]->simplificationEpsilon -
-          t.simplifications[i]->simplificationEpsilon;
+          queryTrajectory.simplifications[i].simplificationEpsilon -
+          t.simplifications[i].simplificationEpsilon;
 
       double decisionEpsilonUpper =
           queryDelta +
-          queryTrajectory.simplifications[i]->simplificationEpsilon +
-          t.simplifications[i]->simplificationEpsilon;
+          queryTrajectory.simplifications[i].simplificationEpsilon +
+          t.simplifications[i].simplificationEpsilon;
 
-      double dist = equalTimeDistance(*t.simplifications[i],
-                                      *queryTrajectory.simplifications[i]);
+      double dist = equalTimeDistance(t.simplifications[i],
+                                      queryTrajectory.simplifications[i]);
 
       if (dist < decisionEpsilonLower) {
         returnTrajectory(t, output);
@@ -779,8 +750,8 @@ private:
       }
 
       if (decisionEpsilonLower > 0) {
-        bool r = cdfqs.calculate(*queryTrajectory.simplifications[i],
-                                 *t.simplifications[i], decisionEpsilonLower,
+        bool r = cdfqs.calculate(queryTrajectory.simplifications[i],
+                                 t.simplifications[i], decisionEpsilonLower,
                                  queryDelta);
         if (r) {
           returnTrajectory(t, output);
@@ -789,8 +760,8 @@ private:
         }
       }
       if (decisionEpsilonUpper > 0) {
-        bool r = cdfqs.calculate(*queryTrajectory.simplifications[i],
-                                 *t.simplifications[i], decisionEpsilonUpper,
+        bool r = cdfqs.calculate(queryTrajectory.simplifications[i],
+                                 t.simplifications[i], decisionEpsilonUpper,
                                  queryDelta);
         if (!r) {
           broke = true;
@@ -860,9 +831,9 @@ private:
 
   public:
     int numRows = 0;
-    bool calculate(const Vertices &P, const Vertices &Q, int offset_p,
-                   int offset_q, int size_p, int size_q, double queryDelta,
-                   double baseQueryDelta,
+    bool calculate(const Vertices &P, const Vertices &Q, size_t offset_p,
+                   size_t offset_q, size_t size_p, size_t size_q,
+                   double queryDelta, double baseQueryDelta,
                    const std::map<int, std::vector<Portal>> &portals) {
       double startDist = dist2(P[offset_p], Q[offset_q]);
       double endDist = dist2(P[size_p - 1], Q[size_q - 1]);
@@ -902,7 +873,8 @@ private:
       queueSize[second] = 0;
 
       // For each column
-      for (int column = offset_q; column < size_q - 1; column++) {
+      for (int column = offset_q; column < static_cast<int>(size_q) - 1;
+           column++) {
         if (queueSize[first] == 0) {
           // nothing reachable anymore
           return false;
@@ -989,39 +961,42 @@ private:
             // try and jump
             if (!outsideQueue && queueSize[second] > 0 &&
                 queue[second][queueSize[second] - 1].end_row_index == row &&
-                Rf.end == 1) {
+                Rf.end == 1.0) {
               // jump-off point possible
               // check if minimum jump distance is big enough
               int gapSize = queue[first][qIndex].end_row_index -
                             queue[first][qIndex].start_row_index;
               if (gapSize > 1) {
-                const std::vector<Portal> &ports = portals.at(row);
-                choice.source = -1;
-                for (const Portal &p : ports) {
-                  // int jumpSize = p.destination - p.source;
-                  // check if jump within range
-                  if (p.destination <= queue[first][qIndex].end_row_index) {
-                    // check if jump distance fits
-                    double segmentFrechet =
-                        computeSegmentFrechet(p, column, P, Q);
-                    if (segmentFrechet + p.distance <= baseQueryDelta) {
-                      choice = p;
+                const auto iter = portals.find(row);
+                if (iter != portals.cend()) {
+                  const std::vector<Portal> &ports = iter->second;
+                  choice.source = -1;
+                  for (const Portal &p : ports) {
+                    // int jumpSize = p.destination - p.source;
+                    // check if jump within range
+                    if (p.destination <= queue[first][qIndex].end_row_index) {
+                      // check if jump distance fits
+                      double segmentFrechet =
+                          computeSegmentFrechet(p, column, P, Q);
+                      if (segmentFrechet + p.distance <= baseQueryDelta) {
+                        choice = p;
+                      }
+                    } else {
+                      break;
                     }
-                  } else {
-                    break;
                   }
-                }
-                // JUMP!
-                if (choice.source != -1) {
-                  row = choice.destination - 1; // - 1 to counter ++ later
-                  queue[second][queueSize[second] - 1].end_row_index = row;
+                  // JUMP!
+                  if (choice.source != -1) {
+                    row = choice.destination - 1; // - 1 to counter ++ later
+                    queue[second][queueSize[second] - 1].end_row_index = row;
+                  }
                 }
               }
             }
             // propagated reachability by one cell, so look at next row
             row++;
             numRows++;
-          } while (left_most_top <= 1 && row < size_p - 1);
+          } while (left_most_top <= 1 && row < static_cast<int>(size_p) - 1);
         }
 
         // swap first and second column
@@ -1033,24 +1008,25 @@ private:
       int endIndex = queueSize[first] - 1;
       if (endIndex == -1)
         return false;
-      bool exit = queue[first][endIndex].start_row_index == size_p - 2 &&
+      bool exit = queue[first][endIndex].start_row_index ==
+                      static_cast<int>(size_p) - 2 &&
                   queue[first][endIndex].lowest_right <= 1;
-      return exit || (queue[first][endIndex].end_row_index == size_p - 2 &&
-                      queue[first][endIndex].start_row_index != size_p - 2);
+      return exit || (queue[first][endIndex].end_row_index ==
+                          static_cast<int>(size_p) - 2 &&
+                      queue[first][endIndex].start_row_index !=
+                          static_cast<int>(size_p) - 2);
     }
 
     bool calculate(const ExtTrajectory &P, const ExtTrajectory &Q,
                    double queryDelta, double baseQueryDelta) {
-      return calculate(P.vertices, Q.vertices, 0, 0, static_cast<int>(P.size()),
-                       static_cast<int>(Q.size()), queryDelta, baseQueryDelta,
-                       P.simpPortals);
+      return calculate(P.vertices, Q.vertices, 0, 0, P.size(), Q.size(),
+                       queryDelta, baseQueryDelta, P.simpPortals);
     }
 
     bool calculate(const ExtTrajectory &P, const ExtTrajectory &Q,
                    double queryDelta) {
-      return calculate(P.vertices, Q.vertices, 0, 0, static_cast<int>(P.size()),
-                       static_cast<int>(Q.size()), queryDelta, queryDelta,
-                       P.simpPortals);
+      return calculate(P.vertices, Q.vertices, 0, 0, P.size(), Q.size(),
+                       queryDelta, queryDelta, P.simpPortals);
     }
   };
 
@@ -1063,7 +1039,7 @@ private:
     double rangeLength = upperbound - lowerbound;
     double avg = lowerbound + (rangeLength) / 2;
     int result = f(avg);
-    if (result > 0) {
+    if (result == 1) {
       binaryDoubleSearch(f, upperbound, avg);
     } else if (result == 0) {
       binaryDoubleSearch(f, avg, lowerbound);
@@ -1145,7 +1121,7 @@ private:
             simplificationEpsilon);
         simpSize++;
         simplified.vertices[simpSize - 1] = P[k];
-        if (k == t.size() - 1) {
+        if (k == static_cast<int>(t.size()) - 1) {
           break;
         }
         prevk = k;
@@ -1217,7 +1193,7 @@ private:
         simpSize++;
         simplified.vertices[simpSize - 1] = P[k];
         simplified.sourceIndex.push_back(parent.sourceIndex[k]);
-        if (k == parent.size() - 1) {
+        if (k == static_cast<int>(parent.size()) - 1) {
           break;
         }
         prevk = k;
@@ -1251,7 +1227,7 @@ private:
                 simptotals[simpSize - 1] + simpdists[simpSize];
             size_t end = 0;
             size_t start = parentSourceIndices[prevk];
-            if (index + 1 >= parentSourceIndices.size()) {
+            if (static_cast<size_t>(index + 1) >= parentSourceIndices.size()) {
               end = sourceTrajectory.size();
             } else {
               end = parentSourceIndices[index + 1];
@@ -1272,7 +1248,9 @@ private:
     }
   };
 };
-} // namespace tue
-}
-}
+
+} // namespace bddm
+} // namespace detail
+} // namespace frechetrange
+
 #endif // TUE_INC

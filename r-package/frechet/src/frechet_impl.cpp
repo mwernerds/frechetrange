@@ -2,10 +2,12 @@
 // [[Rcpp::plugins(cpp11)]]
 
 #include <array>
-#include <functional>
+#include <stdexcept> // for std::runtime_error
+#include <utility>   // for std::move
+#include <vector>
 
-#include "../../../include/frechetrange.hpp"
-#include "../../../include/tue.hpp"
+//#define ENABLE_MULTITHREADING
+#include "../../../include/frechetrange/frechetrange.hpp"
 
 using Rcpp::NumericMatrix;
 using Rcpp::List;
@@ -32,10 +34,10 @@ struct get_adapter_coord {
   }
 };
 
-frechetrange::detail::duetschvahrenhold::frechet_distance<2, get_adapter_coord>
+frechetrange::detail::dv::frechet_distance<2, get_adapter_coord>
     fd;
 
-frechetrange::detail::baldusbringmann::frechet_distance<2, get_adapter_coord>
+frechetrange::detail::bb::frechet_distance<2, get_adapter_coord>
     fd2;
 
 // [[Rcpp::export]]
@@ -105,7 +107,7 @@ public:
 /// as some of the implementations are not yet compatible.
 template <size_t dims> class grid_data {
 public:
-  typedef frechetrange::detail::duetschvahrenhold::grid<
+  typedef frechetrange::detail::dv::grid<
       dims, _trajectory_t<dims>, get_point_coord>
       grid_type;
 
@@ -162,7 +164,7 @@ size_t internal_dv_clear(size_t handle) {
 bool internal_dv_build_index(size_t handle, double meshSize) {
   ASSERT_VALID_DATASET(g_grids, handle);
   Rcout << "Creating dv index from " << g_grids[handle].size()
-        << " trajectories.";
+        << " trajectories." << std::endl;
   g_grids[handle].build_index(meshSize);
 }
 
@@ -182,7 +184,7 @@ List internal_dv_range_query(size_t handle, const NumericMatrix &m,
 // ------------------- baldusbringmann::spatial_index -------------------
 
 template <size_t dims>
-using bb_index_type = frechetrange::detail::baldusbringmann::spatial_index<
+using bb_index_type = frechetrange::detail::bb::spatial_index<
     g_DIMENSIONS, _trajectory_t<dims>, get_point_coord>;
 
 std::vector<bb_index_type<g_DIMENSIONS>> g_treeIndices;
@@ -219,7 +221,7 @@ List internal_bb_range_query(size_t handle, const NumericMatrix &m,
 
 template <size_t dims>
 using tue_index_type =
-    frechetrange::detail::tue::spatial_hash<g_DIMENSIONS, _trajectory_t<dims>,
+    frechetrange::detail::bddm::spatial_hash<g_DIMENSIONS, _trajectory_t<dims>,
                                             get_point_coord>;
 
 std::vector<tue_index_type<g_DIMENSIONS>> g_tue_indices;
@@ -235,7 +237,7 @@ size_t internal_tue_add_trajectory(size_t handle, const NumericMatrix &m) {
   ASSERT_VALID_DATASET(g_tue_indices, handle);
   _trajectory_t<g_DIMENSIONS> t(m.nrow());
   _copyMatrixToTrajectory<g_DIMENSIONS>(m, t);
-  g_tue_indices[handle].insert(t);
+  g_tue_indices[handle].insert(std::move(t));
   return (g_tue_indices[handle].size() - 1);
 }
 
@@ -243,7 +245,7 @@ size_t internal_tue_add_trajectory(size_t handle, const NumericMatrix &m) {
 bool internal_tue_build_index(size_t handle) {
   ASSERT_VALID_DATASET(g_tue_indices, handle);
   Rcout << "Creating tue index from " << g_tue_indices[handle].size()
-        << " trajectories.";
+        << " trajectories." << std::endl;
   g_tue_indices[handle].build_index();
 }
 
