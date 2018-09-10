@@ -427,7 +427,7 @@ class spatial_hash {
     class DiHash {
         struct Vertex {
             const point &p;
-            const ExtTrajectory &trajectory;
+            const ExtTrajectory &t;
             bool isStart;
         };
 
@@ -487,7 +487,7 @@ class spatial_hash {
                         if (pActual.isStart) {
                             double distSQ = dist2(start, pActual.p);
                             if (distSQ < eps * eps) {
-                                const ExtTrajectory &t = pActual.trajectory;
+                                const ExtTrajectory &t = pActual.t;
                                 if (dist2(end, t.back()) < eps * eps) {
                                     emit(t);
                                 }
@@ -762,7 +762,7 @@ class spatial_hash {
     template <typename OutputFunctional>
     void returnTrajectory(const ExtTrajectory &et,
                           OutputFunctional &output) const {
-        const Trajectory &t = _srcTrajectories[et.index];
+        const trajectory &t = _srcTrajectories[et.index];
         output(t);
     }
 
