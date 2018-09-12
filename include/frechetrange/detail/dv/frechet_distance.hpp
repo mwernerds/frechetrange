@@ -35,8 +35,8 @@ class frechet_distance {
     * Not thread-safe.
     * @pre Neither of the trajectories is empty.
     */
-    template <typename Trajectory>
-    bool is_bounded_by(const Trajectory &traj1, const Trajectory &traj2,
+    template <typename trajectory>
+    bool is_bounded_by(const trajectory &traj1, const trajectory &traj2,
                        double distance_bound) const {
         const double boundSquared = distance_bound * distance_bound;
 
@@ -47,12 +47,16 @@ class frechet_distance {
             return false;
 
         bool firstIsSmaller = traj1.size() <= traj2.size();
-        const Trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
-        const Trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
+        const trajectory &smallerTraj = firstIsSmaller ? traj1 : traj2;
+        const trajectory &biggerTraj = firstIsSmaller ? traj2 : traj1;
 
         if (smallerTraj.size() == 1) {
             return comparePointToTrajectory(smallerTraj[0], biggerTraj,
                                             boundSquared);
+#ifdef USE_POSITIVE_FILTER
+        } else if (positiveFilter(traj1, traj2, boundSquared)) {
+            return true;
+#endif
         } else if (!matchInnerPointsMonotonously(traj1, traj2, boundSquared) ||
                    !matchInnerPointsMonotonously(traj2, traj1, boundSquared)) {
             // There exists no monotone matchting from one trajectory to the
@@ -81,18 +85,76 @@ class frechet_distance {
     * Decides the Fréchet distance problem for a trajectory consisting of only
     * one point.
     */
-    template <typename Trajectory, typename point_type>
+    template <typename trajectory, typename point_type>
     bool comparePointToTrajectory(const point_type &p,
-                                  const Trajectory &trajectory,
+                                  const trajectory &t,
                                   const double boundSquared) const {
         // the first point has already been tested
-        for (size_t i = 1; i < trajectory.size(); ++i) {
-            if (_dist2(p, trajectory[i]) > boundSquared) {
+        for (size_t i = 1; i < t.size(); ++i) {
+            if (_dist2(p, t[i]) > boundSquared) {
                 return false;
             }
         }
         return true;
     }
+
+#ifdef USE_POSITIVE_FILTER
+    template <typename trajectory>
+    bool positiveFilter(const trajectory &traj1,
+                        const trajectory &traj2,
+                        const double boundSquared) const {
+        // Positive greedy filter as developed by Baldus and Bringmann in
+        // "A fast implementation of near neighbors queries for Fréchet distance",
+        // SIGSPATIAL'17
+        size_t idx1 = 0, idx2 = 0;
+        while (idx1 < traj1.size() - 1 && idx2 < traj2.size() - 1) {
+            // Distances of three next pairings
+            double dist1 = _dist2(traj1[idx1 + 1], traj2[idx2]);
+            double dist2 = _dist2(traj1[idx1], traj2[idx2 + 1]);
+            double dist12 = _dist2(traj1[idx1 + 1], traj2[idx2 + 1]);
+
+            // Find the minimal distance
+            if (dist12 < dist1 && dist12 < dist2) {
+                if (dist12 > boundSquared) {
+                    return false;
+                }
+
+                ++idx1;
+                ++idx2;
+            } else if (dist1 < dist2) {
+                if (dist12 > boundSquared) {
+                    return false;
+                }
+
+                ++idx1;
+            } else {
+                if (dist12 > boundSquared) {
+                    return false;
+                }
+
+                ++idx2;
+            }
+        }
+
+        // Advance to the end of the first trajectory, if necessary
+        while (idx1 < traj1.size() - 2) {
+            ++idx1;
+            if (_dist2(traj1[idx1], traj2[idx2]) > boundSquared) {
+                return false;
+            }
+        }
+
+        // Advance to the end of the second trajectory, if necessary
+        while (idx2 < traj2.size() - 2) {
+            ++idx2;
+            if (_dist2(traj1[idx1], traj2[idx2]) > boundSquared) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+#endif
 
     /**
     * Ensures that the sequence of passed points can be matched to a sequence of
@@ -100,9 +162,9 @@ class frechet_distance {
     * such that each matching is within the passed distance bound and the
     * sequence of segment points is monotone.
     */
-    template <typename Trajectory>
-    bool matchInnerPointsMonotonously(const Trajectory &points,
-                                      const Trajectory &segments,
+    template <typename trajectory>
+    bool matchInnerPointsMonotonously(const trajectory &points,
+                                      const trajectory &segments,
                                       double boundSquared) const {
         // the last point has already been tested
         const size_t pointsToMatchEnd = points.size() - 1;
@@ -157,8 +219,8 @@ class frechet_distance {
     * @pre Both trajectories consist of at least two points
     *      and the starting and ending points are within distance.
     */
-    template <typename Trajectory>
-    bool traverseFreeSpaceDiagram(const Trajectory &p1, const Trajectory &p2,
+    template <typename trajectory>
+    bool traverseFreeSpaceDiagram(const trajectory &p1, const trajectory &p2,
                                   const double boundSquared) const {
         // init the beginnings of reachable parts of the "frontline",
         // i.e., the right segments of the column lastly processed
