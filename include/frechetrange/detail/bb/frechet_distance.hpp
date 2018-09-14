@@ -26,14 +26,14 @@ valtype sqr(valtype a) {
  * Represents a trajectory. Additionally to the points given in the input file,
  * we also store the length of any prefix of the trajectory.
  */
-template <typename Trajectory>
+template <typename trajectory>
 class curve {
-    const Trajectory _trajectory;
+    const trajectory _trajectory;
     std::vector<distance_t> _prefix_length;
 
    public:
     template <typename squared_distance>
-    curve(const Trajectory &t, const squared_distance &dist2)
+    curve(const trajectory &t, const squared_distance &dist2)
         : _trajectory(t), _prefix_length(t.size()) {
         _prefix_length[0] = 0;
         for (size_t i = 1; i < t.size(); ++i)
@@ -45,7 +45,7 @@ class curve {
 
     size_t size() const { return _trajectory.size(); }
 
-    const Trajectory &trajectory() const { return _trajectory; }
+    const trajectory &get_trajectory() const { return _trajectory; }
 
     distance_t curve_length(size_t i, size_t j) const {
         return _prefix_length[j] - _prefix_length[i];
@@ -132,8 +132,8 @@ class frechet_distance {
     }
 
     /*Section 2: Elementary Frechet operations*/
-    template <typename Trajectory, typename point>
-    distance_t get_dist_to_point_sqr(const Trajectory &t,
+    template <typename trajectory, typename point>
+    distance_t get_dist_to_point_sqr(const trajectory &t,
                                      const point &p) const {
         distance_t result = 0;
         for (size_t i = 0; i < t.size(); ++i)
@@ -141,17 +141,17 @@ class frechet_distance {
         return result;
     }
 
-    template <typename Trajectory>
-    interval get_reachable_a(size_t i, size_t j, const Trajectory &a,
-                             const Trajectory &b, distance_t d) const {
+    template <typename trajectory>
+    interval get_reachable_a(size_t i, size_t j, const trajectory &a,
+                             const trajectory &b, distance_t d) const {
         distance_t start, end;
         std::tie(start, end) = intersection_interval(a[i], d, b[j], b[j + 1]);
         return {start + j, end + j};
     }
 
-    template <typename Trajectory>
-    interval get_reachable_b(size_t i, size_t j, const Trajectory &a,
-                             const Trajectory &b, distance_t d) const {
+    template <typename trajectory>
+    interval get_reachable_b(size_t i, size_t j, const trajectory &a,
+                             const trajectory &b, distance_t d) const {
         return get_reachable_a(j, i, b, a, d);
     }
 
@@ -163,9 +163,9 @@ class frechet_distance {
             v.push_back(i);
     }
 
-    template <typename Trajectory>
-    distance_t get_last_reachable_point_from_start(const Trajectory &a,
-                                                   const Trajectory &b,
+    template <typename trajectory>
+    distance_t get_last_reachable_point_from_start(const trajectory &a,
+                                                   const trajectory &b,
                                                    const distance_t d) const {
         size_t j = 0;
         while (j < b.size() - 2 && _dist2(a[0], b[j + 1]) <= sqr(d)) ++j;
@@ -175,10 +175,10 @@ class frechet_distance {
         return result;
     }
 
-    template <typename Trajectory>
+    template <typename trajectory>
     void get_reachable_intervals(size_t i_min, size_t i_max, size_t j_min,
-                                 size_t j_max, const curve<Trajectory> &a,
-                                 const curve<Trajectory> &b, distance_t d,
+                                 size_t j_max, const curve<trajectory> &a,
+                                 const curve<trajectory> &b, distance_t d,
                                  std::vector<interval> &rb,
                                  std::vector<interval> &ra,
                                  std::vector<interval> &rb_out,
@@ -207,8 +207,8 @@ class frechet_distance {
 
         if (is_empty_interval(tb) && is_empty_interval(ta)) return;
 
-        const Trajectory &t1 = a.trajectory();
-        const Trajectory &t2 = b.trajectory();
+        const trajectory &t1 = a.get_trajectory();
+        const trajectory &t2 = b.get_trajectory();
         if (tb.first <= j_min + eps && tb.second >= j_max - eps &&
             ta.first <= i_min + eps && ta.second >= i_max - eps) {
             size_t i_mid = (i_min + 1 + i_max) / 2;
@@ -266,21 +266,21 @@ class frechet_distance {
     frechet_distance &operator=(const frechet_distance &) = default;
     frechet_distance &operator=(frechet_distance &&) = default;
 
-    template <typename Trajectory>
-    bool is_bounded_by(const Trajectory &a, const Trajectory &b,
+    template <typename trajectory>
+    bool is_bounded_by(const trajectory &a, const trajectory &b,
                        distance_t d) const {
-        return is_bounded_by(curve<Trajectory>(a, _dist2),
-                             curve<Trajectory>(b, _dist2), d);
+        return is_bounded_by(curve<trajectory>(a, _dist2),
+                             curve<trajectory>(b, _dist2), d);
     }
 
-    template <typename Trajectory>
-    bool is_bounded_by(const curve<Trajectory> &c1, const curve<Trajectory> &c2,
+    template <typename trajectory>
+    bool is_bounded_by(const curve<trajectory> &c1, const curve<trajectory> &c2,
                        distance_t d) const {
         assert(c1.size());
         assert(c2.size());
 
-        const Trajectory &t1 = c1.trajectory();
-        const Trajectory &t2 = c2.trajectory();
+        const trajectory &t1 = c1.get_trajectory();
+        const trajectory &t2 = c2.get_trajectory();
         if (_dist2(t1[0], t2[0]) > sqr(d) ||
             _dist2(t1[t1.size() - 1], t2[t2.size() - 1]) > sqr(d))
             return false;

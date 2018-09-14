@@ -155,7 +155,7 @@ using quadtree = quadtree_node<dimensions, element, max_elments_per_node>;
 
 // ----------- spatial_index -----------
 
-template <size_t dimensions, typename Trajectory, typename get_coordinate,
+template <size_t dimensions, typename trajectory, typename get_coordinate,
           typename squared_distance =
               euclidean_distance_sqr<dimensions, get_coordinate>>
 class spatial_index {
@@ -169,7 +169,7 @@ class spatial_index {
 
     size_t size() const { return _curves.size(); }
 
-    void insert(const Trajectory &t) {
+    void insert(const trajectory &t) {
         _q.add(_curves.size(), get_position(t));
         _curves.emplace_back(t, _dist2);
     }
@@ -178,10 +178,10 @@ class spatial_index {
     // less.
     // The result may however contain some whose frechet distance to c is too
     // large.
-    std::vector<const Trajectory *> range_query(const Trajectory &t,
+    std::vector<const trajectory *> range_query(const trajectory &t,
                                                 distance_t d) const {
-        std::vector<const Trajectory *> resultSet;
-        auto pushBackResult = [&resultSet](const Trajectory &t) {
+        std::vector<const trajectory *> resultSet;
+        auto pushBackResult = [&resultSet](const trajectory &t) {
             resultSet.push_back(&t);
         };
         range_query(t, d, pushBackResult);
@@ -189,22 +189,22 @@ class spatial_index {
     }
 
     template <typename OutputFunctional>
-    void range_query(const Trajectory &t, distance_t d,
+    void range_query(const trajectory &t, distance_t d,
                      OutputFunctional &output) const {
         // TODO: don't copy t
-        curve<Trajectory> c(t, _dist2);
+        curve<trajectory> c(t, _dist2);
         std::vector<size_t> potential_curves = _q.get(get_position(t), d);
 
         for (size_t i : potential_curves) {
-            const curve<Trajectory> &c2 = _curves[i];
+            const curve<trajectory> &c2 = _curves[i];
 
-            if (get_frechet_distance_upper_bound(t, c2.trajectory()) <=
+            if (get_frechet_distance_upper_bound(t, c2.get_trajectory()) <=
                 sqr(d)) {
-                output(c2.trajectory());
+                output(c2.get_trajectory());
             } else if (negfilter(c, c2, d)) {
                 continue;
             } else if (_frechetDistance.is_bounded_by(c, c2, d)) {
-                output(c2.trajectory());
+                output(c2.get_trajectory());
             }
         }
     }
@@ -215,7 +215,7 @@ class spatial_index {
 
     quadtree<8, size_t>
         _q;  // first x, first y, last x, last y, min x, min y, max x, max y
-    std::vector<curve<Trajectory>> _curves;
+    std::vector<curve<trajectory>> _curves;
 
     squared_distance _dist2;
     frechet_distance<dimensions, get_coordinate, squared_distance>
@@ -226,7 +226,7 @@ class spatial_index {
         return std::sqrt(_dist2(p, q));
     }
 
-    nd_point<8> get_position(const Trajectory &t) const {
+    nd_point<8> get_position(const trajectory &t) const {
         size_t last = t.size() - 1;
         nd_point<8> p = {{get_coordinate::template get<0>(t[0]),
                           get_coordinate::template get<1>(t[0]),
@@ -249,8 +249,8 @@ class spatial_index {
      * guessing a matching between a and b
      * O(a.size() + b.size())
      */
-    distance_t get_frechet_distance_upper_bound(const Trajectory &a,
-                                                const Trajectory &b) const {
+    distance_t get_frechet_distance_upper_bound(const trajectory &a,
+                                                const trajectory &b) const {
         distance_t sqrdDist = _dist2(a[a.size() - 1], b[b.size() - 1]);
         size_t pos_a = 0, pos_b = 0;
 
@@ -284,9 +284,9 @@ class spatial_index {
      * i, that is within distance d of point p.
      */
     template <typename Point>
-    size_t nextclosepoint(const curve<Trajectory> &c, size_t i, const Point &p,
+    size_t nextclosepoint(const curve<trajectory> &c, size_t i, const Point &p,
                           distance_t d) const {
-        const Trajectory &t = c.trajectory();
+        const trajectory &t = c.get_trajectory();
         size_t delta = 1;
         size_t k = i;
         while (true) {
@@ -315,20 +315,20 @@ class spatial_index {
      * Returns
      * true if a proof is found.
      */
-    bool negfilter(const curve<Trajectory> &c1, const curve<Trajectory> &c2,
+    bool negfilter(const curve<trajectory> &c1, const curve<trajectory> &c2,
                    distance_t d) const {
         for (size_t delta = std::max(c1.size(), c2.size()) - 1; delta >= 1;
              delta /= 2) {
             size_t i = 0;
             for (size_t j = 0; j < c2.size(); j += delta) {
-                i = nextclosepoint(c1, i, c2.trajectory()[j], d);
+                i = nextclosepoint(c1, i, c2.get_trajectory()[j], d);
                 if (i >= c1.size()) {
                     return true;
                 }
             }
             size_t j = 0;
             for (size_t i = 0; i < c1.size(); i += delta) {
-                j = nextclosepoint(c2, j, c1.trajectory()[i], d);
+                j = nextclosepoint(c2, j, c1.get_trajectory()[i], d);
                 if (j >= c2.size()) {
                     return true;
                 }
