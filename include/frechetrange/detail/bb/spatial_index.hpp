@@ -161,11 +161,11 @@ template <size_t dimensions, typename trajectory, typename get_coordinate,
 class spatial_index {
    public:
     spatial_index(const squared_distance &dist2 = squared_distance())
-        : _q({{min_x, min_y, min_x, min_y, min_x, min_y, min_x, min_y}},
-             {{max_x, max_y, max_x, max_y, max_x, max_y, max_x, max_y}}),
+        : _q({{MIN_X, MIN_Y, MIN_X, MIN_Y, MIN_X, MIN_Y, MIN_X, MIN_Y}},
+             {{MAX_X, MAX_Y, MAX_X, MAX_Y, MAX_X, MAX_Y, MAX_X, MAX_Y}}),
           _curves(),
           _dist2(dist2),
-          _frechetDistance(dist2) {}
+          _frechet_dist(dist2) {}
 
     size_t size() const { return _curves.size(); }
 
@@ -180,17 +180,17 @@ class spatial_index {
     // large.
     std::vector<const trajectory *> range_query(const trajectory &t,
                                                 distance_t d) const {
-        std::vector<const trajectory *> resultSet;
-        auto pushBackResult = [&resultSet](const trajectory &t) {
-            resultSet.push_back(&t);
+        std::vector<const trajectory *> result_set;
+        auto push_back_result = [&result_set](const trajectory &t) {
+            result_set.push_back(&t);
         };
-        range_query(t, d, pushBackResult);
-        return resultSet;
+        range_query(t, d, push_back_result);
+        return result_set;
     }
 
-    template <typename OutputFunctional>
+    template <typename output_func>
     void range_query(const trajectory &t, distance_t d,
-                     OutputFunctional &output) const {
+                     output_func &output) const {
         // TODO: don't copy t
         curve<trajectory> c(t, _dist2);
         std::vector<size_t> potential_curves = _q.get(get_position(t), d);
@@ -203,26 +203,25 @@ class spatial_index {
                 output(c2.get_trajectory());
             } else if (negfilter(c, c2, d)) {
                 continue;
-            } else if (_frechetDistance.is_bounded_by(c, c2, d)) {
+            } else if (_frechet_dist.is_bounded_by(c, c2, d)) {
                 output(c2.get_trajectory());
             }
         }
     }
 
    private:
-    static constexpr distance_t min_x = -1e18l, min_y = -1e18l, max_x = 1e18l,
-                                max_y = 1e18l;
+    static constexpr distance_t MIN_X = -1e18l, MIN_Y = -1e18l, MAX_X = 1e18l,
+                                MAX_Y = 1e18l;
 
-    quadtree<8, size_t>
-        _q;  // first x, first y, last x, last y, min x, min y, max x, max y
+    quadtree<8, size_t> _q;  // first x, first y, last x, last y, min x, min y, max x, max y
     std::vector<curve<trajectory>> _curves;
 
     squared_distance _dist2;
     frechet_distance<dimensions, get_coordinate, squared_distance>
-        _frechetDistance;
+        _frechet_dist;
 
-    template <typename Point>
-    distance_t dist(Point &p, Point &q) const {
+    template <typename point_t>
+    distance_t dist(point_t &p, point_t &q) const {
         return std::sqrt(_dist2(p, q));
     }
 
@@ -231,8 +230,8 @@ class spatial_index {
         nd_point<8> p = {{get_coordinate::template get<0>(t[0]),
                           get_coordinate::template get<1>(t[0]),
                           get_coordinate::template get<0>(t[last]),
-                          get_coordinate::template get<1>(t[last]), max_x,
-                          max_y, min_x, min_y}};
+                          get_coordinate::template get<1>(t[last]), MAX_X,
+                          MAX_Y, MIN_X, MIN_Y}};
         for (size_t i = 0; i <= last; ++i) {
             p[4] = std::min(p[4], get_coordinate::template get<0>(t[i]));
             p[5] = std::min(p[5], get_coordinate::template get<1>(t[i]));
@@ -251,11 +250,11 @@ class spatial_index {
      */
     distance_t get_frechet_distance_upper_bound(const trajectory &a,
                                                 const trajectory &b) const {
-        distance_t sqrdDist = _dist2(a[a.size() - 1], b[b.size() - 1]);
+        distance_t sqrd_dist = _dist2(a[a.size() - 1], b[b.size() - 1]);
         size_t pos_a = 0, pos_b = 0;
 
         while (pos_a + pos_b < a.size() + b.size() - 2) {
-            sqrdDist = std::max(sqrdDist, _dist2(a[pos_a], b[pos_b]));
+            sqrd_dist = std::max(sqrd_dist, _dist2(a[pos_a], b[pos_b]));
             if (pos_a == a.size() - 1)
                 ++pos_b;
             else if (pos_b == b.size() - 1)
@@ -275,7 +274,7 @@ class spatial_index {
             }
         }
 
-        return sqrdDist;
+        return sqrd_dist;
     }
 
     /*
@@ -283,9 +282,9 @@ class spatial_index {
      * >=
      * i, that is within distance d of point p.
      */
-    template <typename Point>
-    size_t nextclosepoint(const curve<trajectory> &c, size_t i, const Point &p,
-                          distance_t d) const {
+    template <typename point_t>
+    size_t nextclosepoint(const curve<trajectory> &c, size_t i,
+                          const point_t &p, distance_t d) const {
         const trajectory &t = c.get_trajectory();
         size_t delta = 1;
         size_t k = i;
