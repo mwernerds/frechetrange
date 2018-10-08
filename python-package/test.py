@@ -28,7 +28,10 @@ def some_simple_and_small_tests():
     print(res)
     res = grid.query(t1,3.01);
     print(res)
+    ## BBIndex
+                              
 
+    
 
 
 def matrix2path(m):
@@ -49,16 +52,16 @@ if __name__=="__main__":
     print("Querying for trajectory %d" % query)
 
     # Prepare the Index Data Structures
-    grid = frechet.DVGrid();
+    idx = frechet.DVGrid();
     # Group trajectories and plot / add them individually
     trajectories = sf.groupby(["id"]) # group
     _ = trajectories.agg(lambda x: plt.plot(x["x"],x["y"],color="gray")) #plot data (in gray)
-    _ = trajectories.agg(lambda x: grid.add(x)) #add
+    _ = trajectories.agg(lambda x: idx.add(x)) #add
 
     # Compute the Index
-    grid.build_index(10)
+    idx.build_index(10)
     # Query
-    result = grid.query(t, 0.1)
+    result = idx.query(t, 0.1)
     print("Querying %d gives %d results" % (query, len(result)))
     # Overlay results (in red)
     for q in result:
@@ -66,3 +69,45 @@ if __name__=="__main__":
     # Draw query on top (in blue)
     plt.plot(t[:,0],t[:,1],color="blue")
     plt.show()
+
+
+    ############## Second Index
+    # Prepare the Index Data Structures
+    idx = frechet.BBIndex();
+    # Group trajectories and plot / add them individually
+    trajectories = sf.groupby(["id"]) # group
+    _ = trajectories.agg(lambda x: plt.plot(x["x"],x["y"],color="gray")) #plot data (in gray)
+    _ = trajectories.agg(lambda x: idx.add(x)) #add
+
+    # Computing the Index is not needed, it is done on insertion
+    # Query
+    result = idx.query(t, 0.1)
+    print("Querying %d gives %d results" % (query, len(result)))
+    # Overlay results (in red)
+    for q in result:
+        plt.plot(q[:,0],q[:,1],color="red")
+    # Draw query on top (in blue)
+    plt.plot(t[:,0],t[:,1],color="blue")
+    plt.show()
+    
+
+    ############## Third Index
+    # Prepare the Index Data Structures
+    idx = frechet.TUEIndex();
+    # Group trajectories and plot / add them individually
+    trajectories = sf.groupby(["id"]) # group
+    _ = trajectories.agg(lambda x: plt.plot(x["x"],x["y"],color="gray")) #plot data (in gray)
+    _ = trajectories.agg(lambda x: idx.add(x)) #add
+
+    idx.build_index();
+    # Query
+    result = idx.query(t, 0.1)
+    print("Querying %d gives %d results" % (query, len(result)))
+    # Overlay results (in red)
+    for q in result:
+        plt.plot(q[:,0],q[:,1],color="red")
+    # Draw query on top (in blue)
+    plt.plot(t[:,0],t[:,1],color="blue")
+    plt.show()
+
+    

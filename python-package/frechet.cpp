@@ -86,17 +86,13 @@ frechetrange::detail::bb::frechet_distance<2, get_adapter_coord>   fd2;
 class FrechetDecider
 {
     public:
-       FrechetDecider()
-       {
-	    std::cout << "Frechet Decider instantiated" << std::endl;
-       }
+       FrechetDecider(){}
 
        bool decide(np::ndarray t1, np::ndarray t2, double dist, std::string decider)
 	{
 	    if (decider == "duetschvahrenhold") return decide_dv(t1,t2,dist);
 	    if (decider == "baldusbringman") return decide_bb(t1,t2,dist);
-
-	    return true;
+	    throw(std::runtime_error("Decider "+decider +" is not known."));
 	}
 
 	bool decide_dv(np::ndarray t1, np::ndarray t2, double dist)
@@ -160,35 +156,6 @@ void _trajectoryToMatrix(const _trajectory_t<dims> &t, np::ndarray &m) {
 }
 
 
-
-
-/*
-template <size_t dims>
-NumericMatrix _trajectory_to_matrix(const _trajectory_t<dims> &t) {
-  NumericMatrix m(t.size(), dims);
-  for (size_t i = 0; i < t.size(); i++)
-    for (size_t d = 0; d < dims; d++)
-      m(i, d) = t[i][d];
-  return m;
-}
-
-template <size_t dims> class append_to_list {
-  List *_list;
-
-public:
-  append_to_list(List &l) : _list(&l) {}
-
-  void operator()(const _trajectory_t<dims> &t) {
-    _list->push_back(_trajectory_to_matrix<dims>(t));
-  }
-};
-
-
-*/
-
-
-
-
 template <size_t dims> class grid_data {
 public:
   typedef frechetrange::detail::dv::grid<
@@ -208,7 +175,7 @@ public:
 
   std::string as_ssv()
   {
-    // This is meant mainly for debug, it gets back the data as a new numpy array.
+    // This is meant mainly for debug, it gets back the data as a SSV string
     std::stringstream ss;
     for (size_t i=0; i< _trajectories.size(); i++)
     {
@@ -261,7 +228,118 @@ private:
 };
 
 
+//////////////////////////// baldusbringmann::spatial_index
+template <size_t dims>
+using bb_index_type = frechetrange::detail::bb::spatial_index<
+    dims, _trajectory_t<dims>, get_point_coord>;
+
+
+
+template<size_t dims>
+class BBIndex
+{
+    private:
+	// need to be a pointer, because copy construction is deleted
+	bb_index_type<dims> *idx;
+    public:
+
+    BBIndex(){
+       idx = new bb_index_type<dims>();
+    }
+    ~BBIndex(){
+	delete idx;
+    }
+
+  size_t add_trajectory(const np::ndarray &m) {
+      _trajectory_t<dims> t(m.shape(0));
+      _copyMatrixToTrajectory<dims>(m, t);
+      idx->insert(t);
+      return (idx->size() - 1);
+  }
+
+  bp::object query(const np::ndarray &m, double dist)
+  {
+      _trajectory_t<dims> t(m.shape(0));
+      _copyMatrixToTrajectory(m, t);
+
+       std::vector<_trajectory_t<dims>> resultSet;
+       auto inserter = [&](const _trajectory_t<dims> &t) {resultSet.push_back(t);};
+       idx->range_query(t, dist, inserter);
+       bp::list l;
+       for (auto &t:resultSet)
+       {
+	    npy_intp  shape[2] = { static_cast<npy_intp> (t.size()),2 }; // array size
+	    np::ndarray ta = np::zeros(bp::make_tuple(t.size(),2),np::dtype::get_builtin<double>());
+	    _trajectoryToMatrix(t,ta);
+	    l.append(ta);
+       }
+       return bp::object(l);
+  }
+
+
+  
+};
+
+//////////////////////// TUE::spatial_hash
+
+template <size_t dims>
+using tue_index_type =
+    frechetrange::detail::bddm::spatial_hash<_point_t<dims>, dims, _trajectory_t<dims>,
+                                            get_point_coord>;
+ 
+
+
+template<size_t dims>
+class TUEIndex
+{
+    private:
+	// need to be a pointer, because copy construction is deleted
+	tue_index_type<dims> *idx;
+    public:
+
+    TUEIndex(){idx = new tue_index_type<dims>();}
+    ~TUEIndex(){delete idx;}
+    
+  size_t add_trajectory(const np::ndarray &m) {
+      _trajectory_t<dims> t(m.shape(0));
+      _copyMatrixToTrajectory<dims>(m, t);
+      idx->insert(std::move(t));
+      return (idx->size() - 1);
+  }
+
+  void build_index(){
+	idx->build_index();
+  }
+    
+  bp::object query(const np::ndarray &m, double dist)
+  {
+      _trajectory_t<dims> t(m.shape(0));
+      _copyMatrixToTrajectory(m, t);
+
+       std::vector<_trajectory_t<dims>> resultSet;
+       auto inserter = [&](const _trajectory_t<dims> &t) {resultSet.push_back(t);};
+       idx->range_query(t, dist, inserter);
+       bp::list l;
+       for (auto &t:resultSet)
+       {
+	    npy_intp  shape[2] = { static_cast<npy_intp> (t.size()),2 }; // array size
+	    np::ndarray ta = np::zeros(bp::make_tuple(t.size(),2),np::dtype::get_builtin<double>());
+	    _trajectoryToMatrix(t,ta);
+	    l.append(ta);
+       }
+       return bp::object(l);
+
+  }
+ 
+};
+
+
+//////////////////// MODULE DEFINITION
+
 typedef grid_data<2> DVGrid;
+typedef BBIndex<2> BBIndex2;
+typedef TUEIndex<2> TUEIndex2;
+
 
 
 BOOST_PYTHON_MODULE(frechet) {
@@ -283,9 +361,49 @@ BOOST_PYTHON_MODULE(frechet) {
            np::ndarray at1 = np::from_object(ot1,np::dtype::get_builtin<double>());
           return self.query(at1, distance);
 	  })
+     .def("clear",+[](DVGrid &self) {
+          self.clear();
+	  })
+     .def("size",+[](DVGrid &self)->int {
+          return self.size();
+	  })
+
 	;
 
-    bp::class_<FrechetDecider>("FrechetDecider")
+
+    bp::class_<BBIndex2>("BBIndex")
+       .def("add",+[](BBIndex2 &self,bp::object ot1) {
+	   np::ndarray at1 = np::from_object(ot1,np::dtype::get_builtin<double>());
+	   self.add_trajectory(at1);
+	})
+     .def("query",+[](BBIndex2 &self, bp::object ot1, double distance)->bp::object {
+           np::ndarray at1 = np::from_object(ot1,np::dtype::get_builtin<double>());
+          return self.query(at1, distance);
+	  })
+     .def("clear",+[](BBIndex2 &self) {
+
+	  });
+
+
+    bp::class_<TUEIndex2>("TUEIndex")
+       .def("add",+[](TUEIndex2 &self,bp::object ot1) {
+	   np::ndarray at1 = np::from_object(ot1,np::dtype::get_builtin<double>());
+	   self.add_trajectory(at1);
+	})
+     .def("query",+[](TUEIndex2 &self, bp::object ot1, double distance)->bp::object {
+           np::ndarray at1 = np::from_object(ot1,np::dtype::get_builtin<double>());
+          return self.query(at1, distance);
+	  })
+     .def("build_index",+[](TUEIndex2 &self) {
+          self.build_index();
+	  })
+     .def("clear",+[](TUEIndex2 &self) {
+
+	  });
+	
+
+
+       bp::class_<FrechetDecider>("FrechetDecider")
        .def("decide",+[](FrechetDecider &self,bp::object ot1,bp::object ot2, double d, std::string decider)->bool {
 	   np::ndarray at1 = np::from_object(ot1,np::dtype::get_builtin<double>());
 	   np::ndarray at2 = np::from_object(ot2,np::dtype::get_builtin<double>());	
