@@ -221,7 +221,7 @@ List internal_bb_range_query(size_t handle, const NumericMatrix &m,
 
 template <size_t dims>
 using tue_index_type =
-    frechetrange::detail::bddm::spatial_hash<g_DIMENSIONS, _trajectory_t<dims>,
+    frechetrange::detail::bddm::spatial_hash<_point_t<dims>, g_DIMENSIONS, _trajectory_t<dims>,
                                             get_point_coord>;
 
 std::vector<tue_index_type<g_DIMENSIONS>> g_tue_indices;
