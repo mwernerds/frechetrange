@@ -34,12 +34,6 @@ def some_simple_and_small_tests():
     
 
 
-def matrix2path(m):
-    print(m.values[0,])
-    print(m.values.shape)
-    codes = [Path.LINETO] * m.shape[0]
-    codes[0] = Path.MOVETO;
-    return Path(m.values,codes)
     
 
 if __name__=="__main__":
