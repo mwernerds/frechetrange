@@ -909,8 +909,8 @@ class spatial_hash {
             if (size_q - offset_q > max) max = size_q - offset_q;
             if (queue[0].size() < max) {
                 for (size_t i = queue[0].size(); i < max; i++) {
-                    queue[0].push_back({0, 0});
-                    queue[1].push_back({0, 0});
+                    queue[0].push_back({0, 0, 0.0});
+                    queue[1].push_back({0, 0, 0.0});
                 }
             }
 
@@ -1214,6 +1214,23 @@ class spatial_hash {
                     dist2);
                 simp_size++;
                 simplified.points[simp_size - 1] = P[k];
+
+                auto p = simplified.points[simp_size - 1];
+                auto p2 = simplified.points[simp_size - 2];
+                double x1 = get_coordinate::template get<0>(p);
+                double y1 = get_coordinate::template get<1>(p);
+
+                double x2 = get_coordinate::template get<0>(p2);
+                double y2 = get_coordinate::template get<1>(p2);
+
+                if (x1 == x2 && y1 == y2) {
+                    // duplicate point, remove
+                    simp_size--;
+                    simplified.points.pop_back();
+                    simplified.distances.pop_back();
+                    simplified.totals.pop_back();
+                }
+
                 if (k == static_cast<int>(t.size()) - 1) {
                     break;
                 }
@@ -1289,6 +1306,24 @@ class spatial_hash {
                 simp_size++;
                 simplified.points[simp_size - 1] = P[k];
                 simplified.sourceIndex.push_back(parent.sourceIndex[k]);
+
+                auto p = simplified.points[simp_size - 1];
+                auto p2 = simplified.points[simp_size - 2];
+                double x1 = get_coordinate::template get<0>(p);
+                double y1 = get_coordinate::template get<1>(p);
+
+                double x2 = get_coordinate::template get<0>(p2);
+                double y2 = get_coordinate::template get<1>(p2);
+
+                if (x1 == x2 && y1 == y2) {
+                    // duplicate point, remove
+                    simp_size--;
+                    simplified.points.pop_back();
+                    simplified.distances.pop_back();
+                    simplified.totals.pop_back();
+                    simplified.sourceIndex.pop_back();
+                }
+
                 if (k == static_cast<int>(parent.size()) - 1) {
                     break;
                 }
