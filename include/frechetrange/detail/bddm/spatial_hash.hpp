@@ -909,8 +909,8 @@ class spatial_hash {
             if (size_q - offset_q > max) max = size_q - offset_q;
             if (queue[0].size() < max) {
                 for (size_t i = queue[0].size(); i < max; i++) {
-                    queue[0].push_back({0, 0});
-                    queue[1].push_back({0, 0});
+                    queue[0].push_back({0, 0, 0.0});
+                    queue[1].push_back({0, 0, 0.0});
                 }
             }
 
